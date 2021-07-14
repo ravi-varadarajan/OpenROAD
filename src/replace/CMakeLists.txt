@@ -73,6 +73,7 @@ messages(TARGET replace)
 target_include_directories(replace
   PUBLIC
     include
+    ${GUI_HOME}/include
 )
 
 target_link_libraries(replace

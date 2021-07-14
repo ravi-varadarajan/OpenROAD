@@ -125,6 +125,7 @@ target_sources(TritonRoute
 target_include_directories(TritonRoute
   PUBLIC
     include
+    ${GUI_HOME}/include
 
   PRIVATE
     src

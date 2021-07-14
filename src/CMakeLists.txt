@@ -20,6 +20,8 @@ include("openroad")
 set(OPENSTA_HOME ${PROJECT_SOURCE_DIR}/src/sta)
 set(OPENDB_HOME ${PROJECT_SOURCE_DIR}/src/OpenDB)
 set(DBSTA_HOME ${PROJECT_SOURCE_DIR}/src/dbSta)
+set(PYGUI_HOME ${PROJECT_SOURCE_DIR}/src/pygui)
+set(GUI_HOME ${PROJECT_SOURCE_DIR}/src/gui)
 set(RESIZER_HOME ${PROJECT_SOURCE_DIR}/src/rsz)
 set(ICEWALL_HOME ${OPENROAD_HOME}/src/ICeWall)
 
@@ -38,6 +40,23 @@ set(OPENROAD_SOURCE
 # This calls cmake/FindTCL.cmake
 # Do not use REQUIRED because it also requires TK.
 find_package(TCL)
+
+find_package(PythonInterp 3)
+find_package(PythonLibs 3)
+if (PythonLibs_FOUND)
+     message(STATUS "Found python at ${PYTHON_EXECUTABLE} VERSION ${PYTHON_VERSION_STRING}")
+     message(STATUS "Found python lib at ${PYTHON_LIBRARIES}")
+     message(STATUS "Found python include at ${PYTHON_INCLUDE_DIRS}")
+     if(DEFINED ENV{ENABLE_PYGUI})
+        message(STATUS "Enabling pygui")
+        set(ENABLE_PYGUI 1)
+        add_definitions( -DENABLE_PYGUI="1")
+        set(PYGUI_ADDL_LIBS oruiobserver)
+        set(GUI_BASIC_LIBS pygui)
+     else()
+        set(GUI_BASIC_LIBS gui)
+     endif()
+endif()
 
 # check for tclReadline
 set(TCL_READLINE_POSSIBLE_NAMES tclreadline-2.1.0
@@ -133,7 +152,11 @@ add_subdirectory(rcx)
 add_subdirectory(psm)
 add_subdirectory(par)
 add_subdirectory(ant)
+if(ENABLE_PYGUI EQUAL 1)
+add_subdirectory(pygui)
+else()
 add_subdirectory(gui)
+endif()
 add_subdirectory(TritonRoute)
 add_subdirectory(utl)
 add_subdirectory(pdr)
@@ -159,6 +182,8 @@ target_compile_features(openroad PUBLIC cxx_std_17)
 target_include_directories(openroad
   PUBLIC
     ../include
+    ${GUI_HOME}/include
+    ${PYGUI_HOME}/include
 )
 
 target_link_libraries(openroad
@@ -179,7 +204,8 @@ target_link_libraries(openroad
   cts
   grt
   tap
-  gui
+  ${GUI_BASIC_LIBS}
+  ${PYGUI_ADDL_LIBS}
   TritonRoute
   mpl
   mpl2
@@ -190,6 +216,7 @@ target_link_libraries(openroad
   pdn
   pdr
   ${TCL_LIBRARY}
+  ${PYTHON_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}
 )
 

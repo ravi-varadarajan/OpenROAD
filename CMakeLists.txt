@@ -58,6 +58,38 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Disable compiler specific extensions like gnu++11.
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(BUILD_PYGUI 1)
+
+find_package(PythonInterp 3)
+find_package(PythonLibs 3)
+if (PythonLibs_FOUND)
+     message(STATUS "Checking for PyQT5")
+     execute_process (
+         COMMAND ${PYTHON_EXECUTABLE} -c "import pkgutil; exit(pkgutil.find_loader('PyQt5') != None)"
+         RESULT_VARIABLE PYQTEXIST
+     )
+     if (PYQTEXIST EQUAL 0)
+         unset (PythonLibs_FOUND)
+         message(STATUS "PyQT5 not found")
+     else()
+         message(STATUS "PyQT5 found")
+     endif()
+endif()
+
+if (PythonLibs_FOUND AND BUILD_PYGUI)
+     SET(PYCOMMAND "\"import sysconfig; print(sysconfig.get_config_var('LINKFORSHARED').rstrip())\"")
+     execute_process (
+         COMMAND bash -c "${PYTHON_EXECUTABLE} -c ${PYCOMMAND}"
+         OUTPUT_VARIABLE linker_vars
+     )
+     string(REPLACE "\n" "" linker_vars ${linker_vars})
+     set(ENV{ENABLE_PYGUI} "1")
+     SET(CMAKE_EXE_LINKER_FLAGS  ${linker_vars})
+     message(STATUS "Found python at ${PYTHON_EXECUTABLE} VERSION ${PYTHON_VERSION_STRING}")
+     message(STATUS "Adding link variables: ${linker_vars}")
+     message(STATUS "Enabling Python based GUI")
+endif()
+
 set(OPENROAD_VERSION ${PROJECT_VERSION})
 message(STATUS "OpenROAD version: ${OPENROAD_VERSION}")
 

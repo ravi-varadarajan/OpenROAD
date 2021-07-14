@@ -240,6 +240,9 @@ OpenRoad::init(Tcl_Interp *tcl_interp)
   stt::readLUT();
   initDbSta(this);
   initResizer(this);
+#ifndef  ENABLE_PYGUI
+  initGui(this);
+#endif
   initDbVerilogNetwork(this);
   initIoplacer(this);
   initReplace(this);

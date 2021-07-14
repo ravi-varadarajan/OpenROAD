@@ -73,4 +73,5 @@ target_include_directories(gui
   PRIVATE
     ${OPENSTA_HOME}/include
     ${DBSTA_HOME}/include
+    ${OPENDB_HOME}/include
 )

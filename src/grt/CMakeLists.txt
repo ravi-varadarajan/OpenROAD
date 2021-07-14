@@ -59,6 +59,7 @@ target_sources(grt
 target_include_directories(grt
   PUBLIC
     include
+    ${GUI_HOME}/include
 )
 
 target_link_libraries(grt

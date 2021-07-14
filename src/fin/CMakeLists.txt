@@ -50,6 +50,7 @@ target_sources(fin
 target_include_directories(fin
   PUBLIC
     include
+    ${GUI_HOME}/include
 )
 
 target_link_libraries(fin

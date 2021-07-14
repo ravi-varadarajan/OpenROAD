@@ -1,0 +1,13 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+    <file>images/new.png</file>
+    <file>images/print.png</file>
+    <file>images/save.png</file>
+    <file>images/undo.png</file>
+    <file>images/maximize.svg</file>
+    <file>images/zoom-in.svg</file>
+    <file>images/zoom-out.svg</file>
+    <file>images/tool.svg</file>
+    <file>images/x.svg</file>
+</qresource>
+</RCC>

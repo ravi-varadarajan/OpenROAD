@@ -56,6 +56,7 @@ target_include_directories(dbSta
     # Unfortunate side-effect of swig include StaTcl.i
     ${OPENSTA_HOME}/include/sta
     ${OPENSTA_HOME}
+    ${GUI_HOME}/include
 )
 
 target_link_libraries(dbSta

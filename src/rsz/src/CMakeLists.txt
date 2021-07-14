@@ -54,6 +54,7 @@ target_sources(rsz
 target_include_directories(rsz
   PUBLIC
     ../include
+    ${GUI_HOME}/include
 )
 
 target_link_libraries(rsz

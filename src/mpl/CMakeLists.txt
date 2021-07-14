@@ -52,6 +52,7 @@ target_sources(mpl
 target_include_directories(mpl
   PUBLIC
     include
+    ${GUI_HOME}/include
 )
 
 target_link_libraries(mpl

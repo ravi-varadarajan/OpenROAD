@@ -53,6 +53,8 @@ target_sources(pdr
 target_include_directories(pdr
   PUBLIC
     include
+    ${GUI_HOME}/include
+    ${OPENDB_HOME}/include
 )
 
 target_link_libraries(pdr
