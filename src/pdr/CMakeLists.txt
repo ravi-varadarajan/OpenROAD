@@ -61,5 +61,5 @@ target_link_libraries(pdr
   PUBLIC
     stt
     utl
-    gui
+    pygui
 )

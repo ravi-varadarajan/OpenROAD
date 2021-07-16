@@ -412,12 +412,14 @@ GLubyte* GLPen::getPenBytePattern(unsigned int patIdx)
 
 GLLayer::GLLayer(const std::string& layerName,
                  int layerIdx,
-                 ORLayerType layerType)
+                 ORLayerType layerType,
+                 bool internalLayer)
     : layerName_(layerName),
       layerIdx_(layerIdx),
       layerType_(layerType),
       selectable_(true),
       visible_(true),
+      internalLayer_(internalLayer),
       layerUserData_(nullptr),
       layerPen_(nullptr),
       parent_(nullptr)
@@ -461,9 +463,14 @@ int GLLayer::getLayerIdx() const
   return layerIdx_;
 }
 
-int GLLayer::getChildCount() const
+int GLLayer::getChildCount(bool includeInternalLayer) const
 {
-  return childLayers_.size();
+  if (includeInternalLayer == true)
+    return childLayers_.size();
+  return std::count_if(
+      childLayers_.begin(), childLayers_.end(), [](auto& p_layer) {
+        return p_layer->isInternalLayer() == false;
+      });
 }
 
 GLLayer* GLLayer::getChildLayerAt(uint idx) const
@@ -475,18 +482,21 @@ GLLayer* GLLayer::getChildLayerAt(uint idx) const
 
 void GLLayer::getChildLayerIdsRecurse(std::vector<uint>& layerIds,
                                       bool checkSelectability,
-                                      bool checkVisibility) const
+                                      bool checkVisibility,
+                                      bool includeInternalLayer) const
 {
   bool includeLayer = true;
   if (checkVisibility && !visible_)
     includeLayer = false;
   if (includeLayer && (checkSelectability && !selectable_))
     includeLayer = false;
-  if (includeLayer)
-    layerIds.push_back(layerIdx_);
+  if (includeLayer) {
+    if (includeInternalLayer || internalLayer_ == false)
+      layerIds.push_back(layerIdx_);
+  }
   for (auto childLayer : childLayers_)
     childLayer->getChildLayerIdsRecurse(
-        layerIds, checkSelectability, checkVisibility);
+        layerIds, checkSelectability, checkVisibility, includeInternalLayer);
   return;
 }
 
@@ -530,6 +540,48 @@ void GLLayer::dumpLayers(GLLayer* layer, int level)
   }
 }
 
+std::vector<uint> GLLayer::getWorldViewDrawLayers() const
+{
+  std::vector<uint> layers;
+  if (getLayerType() == DUMMY_LAYER_0) {
+    for (auto& p_layer : childLayers_)
+      layers.push_back(p_layer->getLayerIdx());
+  } else if (getLayerName() == "ROOT") {  // Design Layers
+    GLLayer* p_designLayer = nullptr;
+    std::vector<uint> allLayerIds;
+    std::vector<ORLayerType> layersToChoose { DESIGN_INSTANCE_LAYER,
+                                              DESIGN_CELLTYPE_LAYER,
+                                              DESIGN_STD_CELL_LAYER,
+                                              DESIGN_BLACKBOX_LAYER,
+                                              //DESIGN_COVERCELL_LAYER,
+                                              //DESIGN_PHYSICAL_CELL_LAYER,
+                                              //DESIGN_FILLER_CELL_LAYER,
+                                              DESIGN_MACRO_LAYER,
+                                              DESIGN_IO_CELL_LAYER,
+                                              DESIGN_IO_LAYER} ;
+    getChildLayerIdsRecurse(allLayerIds, false, false, false);
+    for (auto layerIdx : allLayerIds) {
+      GLLayer* p_layer = GLLayer::getLayerAt(layerIdx);
+      if(std::find(layersToChoose.begin(), layersToChoose.end(), layerIdx) != layersToChoose.end())
+        layers.push_back(layerIdx);
+    }
+  }
+  return layers;
+}
+
+std::vector<uint> GLLayer::getWorldViewSelectLayers() const
+{
+  std::vector<uint> layers;
+  std::vector<uint> allLayerIds;
+  getChildLayerIdsRecurse(allLayerIds, false, false, true);
+  for (auto layerIdx : allLayerIds) {
+    GLLayer* p_layer = GLLayer::getLayerAt(layerIdx);
+    if (p_layer->getLayerType() == WORLD_VIEW_LAYER)
+      layers.push_back(layerIdx);
+  }
+  return layers;
+}
+
 // static
 GLLayer* GLLayer::getLayerAt(uint idx)
 {
@@ -566,15 +618,16 @@ GLLayer* GLLayer::getRootLayer()
   return _rootLayer;
 }
 
-GLLayer* GLLayer::createDummyLayerTree()
+GLLayer* GLLayer::createDummyLayerTree(bool outlineOnly)
 {
   // Create a Dummy Top Layer
   int layerIdx = 0;
   std::string topLayerName("DummyTop");
   ORLayerType curLayerType = DUMMY_LAYER_0;
-  GLLayer* topLayer = new GLLayer(topLayerName, layerIdx, curLayerType);
+  GLLayer* topLayer
+      = new GLLayer(topLayerName, layerIdx, curLayerType, outlineOnly);
   std::vector<std::string> penColors{
-      "red", "yellow", "green", "lilac", "purple", "cyan"};
+      "red", "yellow", "green", "lilac", "purple", "cyan", "black"};
   // std::vector<ORPenPatternType> penPats { OR_FILL_SOLID_PAT,
   // OR_LEFT_DIAG_PAT, OR_LEFT_DIAG_SPARSE_PAT, OR_CROSS_PAT, OR_VERTICAL_PAT,
   // OR_FILL_NONE_PAT} ;
@@ -583,12 +636,16 @@ GLLayer* GLLayer::createDummyLayerTree()
                                         OR_LEFT_DIAG_SPARSE_PAT,
                                         OR_FILL_NONE_PAT,
                                         OR_VERTICAL_PAT,
+                                        OR_FILL_NONE_PAT,
                                         OR_FILL_NONE_PAT};
-  for (layerIdx = 1; layerIdx <= 6; ++layerIdx) {
+  for (layerIdx = 1; layerIdx <= 7; ++layerIdx) {
     std::string layerName("ChildLayer ");
     layerName += std::to_string(layerIdx);
-    GLLayer* layer = new GLLayer(
-        layerName, layerIdx, static_cast<ORLayerType>(curLayerType + layerIdx));
+    GLLayer* layer
+        = new GLLayer(layerName,
+                      layerIdx,
+                      static_cast<ORLayerType>(curLayerType + layerIdx),
+                      outlineOnly);
     topLayer->addChildLayer(layer);
     GLPen* pen = new GLPen(penColors[layerIdx - 1], penPats[layerIdx - 1]);
     // OpenRoadPen* pen = new OpenRoadPen(penColors[layerIdx-1],
@@ -596,7 +653,19 @@ GLLayer* GLLayer::createDummyLayerTree()
     layer->setLayerPen(pen);
     if (layerIdx == 6)
       layer->setLayerSelectable(false);
+    if (outlineOnly) {
+      layer->setLayerVisible(false);
+      layer->setLayerSelectable(false);
+    }
   }
+
+  std::string wvLayerName("WorldViewerLayer");
+  GLLayer* layer = new GLLayer(wvLayerName, layerIdx, WORLD_VIEW_LAYER, true);
+  layer->setLayerVisible(false);
+  layer->setLayerSelectable(false);
+  topLayer->addChildLayer(layer);
+  GLPen* pen = new GLPen("yellow", OR_LEFT_DIAG_SPARSE_PAT);
+  layer->setLayerPen(pen);
   std::stringstream oss;
   oss << "Created Dummy Layer Tree with " << topLayer->getChildCount()
       << " Leaf Layers under top";

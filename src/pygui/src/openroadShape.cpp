@@ -65,6 +65,12 @@ std::string GLShape::getShapeInfo(uint layerIdx, int dbId) const
   return OpenRoadLayoutContext::getShapeInfo(this, layerIdx, dbId);
 }
 
+// static
+void GLShape::destroyShape(GLShape* p_shp)
+{
+  delete p_shp;
+}
+
 GLCompositeShape::GLCompositeShape(const std::vector<GLShape*>& shapes)
     : GLShape()
 {
@@ -92,18 +98,19 @@ uint GLCompositeShape::draw(GLView* view,
     pen->setGLPenContext();
   if (drawAt) {
     glPushMatrix();
-    glTranslatef(bg::get<0>(*drawAt), bg::get<1>(*drawAt), 0);
+    glTranslatef(
+        boost::geometry::get<0>(*drawAt), boost::geometry::get<1>(*drawAt), 0);
   }
   auto minC = compositeBBox_.min_corner();
   auto maxC = compositeBBox_.max_corner();
-  auto llx = bg::get<0>(minC);
-  auto lly = bg::get<1>(minC);
-  auto urx = bg::get<0>(maxC);
-  auto ury = bg::get<0>(maxC);
+  auto llx = boost::geometry::get<0>(minC);
+  auto lly = boost::geometry::get<1>(minC);
+  auto urx = boost::geometry::get<0>(maxC);
+  auto ury = boost::geometry::get<0>(maxC);
 
   auto minDrawArea = view->getMinDrawableArea();
 
-  if (bg::area(compositeBBox_) <= minDrawArea) {
+  if (boost::geometry::area(compositeBBox_) <= minDrawArea) {
     glBegin(GL_POINTS);
     glVertex2f(llx, lly);
     glEnd();
@@ -189,17 +196,18 @@ uint GLRectShape::draw(GLView* view,
     pen->setGLPenContext();
   if (drawAt != nullptr) {
     glPushMatrix();
-    glTranslatef(bg::get<0>(*drawAt), bg::get<1>(*drawAt), 0);
+    glTranslatef(
+        boost::geometry::get<0>(*drawAt), boost::geometry::get<1>(*drawAt), 0);
   }
   auto minC = rectShp_.min_corner();
   auto maxC = rectShp_.max_corner();
-  auto llx = bg::get<0>(minC);
-  auto lly = bg::get<1>(minC);
-  auto urx = bg::get<0>(maxC);
-  auto ury = bg::get<1>(maxC);
+  auto llx = boost::geometry::get<0>(minC);
+  auto lly = boost::geometry::get<1>(minC);
+  auto urx = boost::geometry::get<0>(maxC);
+  auto ury = boost::geometry::get<1>(maxC);
   auto minDrawArea = view->getMinDrawableArea();
 
-  if (bg::area(rectShp_) <= minDrawArea) {
+  if (boost::geometry::area(rectShp_) <= minDrawArea) {
     glBegin(GL_POINTS);
     glVertex2f(llx, lly);
     glEnd();
@@ -232,6 +240,13 @@ GLShape* GLRectShape::clone() const
   return shp;
 }
 
+// static
+GLShape* GLRectShape::getGLRectShape(const GLRectangle& rect)
+{
+  GLShape* shp = new GLRectShape(rect);
+  return shp;
+}
+
 GLSegmentShape::GLSegmentShape(const GLSegment& seg,
                                float lineWidth,
                                bool smooth,
@@ -258,10 +273,10 @@ GLSegmentShape::GLSegmentShape(const ORSegment_t& seg,
 
 ORRect_t GLSegmentShape::getBBox() const
 {
-  double x0 = bg::get<0, 0>(segment_);
-  double y0 = bg::get<0, 1>(segment_);
-  double x1 = bg::get<1, 0>(segment_);
-  double y1 = bg::get<1, 1>(segment_);
+  double x0 = boost::geometry::get<0, 0>(segment_);
+  double y0 = boost::geometry::get<0, 1>(segment_);
+  double x1 = boost::geometry::get<1, 0>(segment_);
+  double y1 = boost::geometry::get<1, 1>(segment_);
   GLRectangle rect(x0, y0, x1, y1);
   ORRect_t fixRect = rect.getRectWithFixedOrientation();
 
@@ -280,19 +295,19 @@ ORRect_t GLSegmentShape::getBBox() const
 
 bool GLSegmentShape::isHorizontalSegment() const
 {
-  double x0 = bg::get<0, 0>(segment_);
-  double y0 = bg::get<0, 1>(segment_);
-  double x1 = bg::get<1, 0>(segment_);
-  double y1 = bg::get<1, 1>(segment_);
+  double x0 = boost::geometry::get<0, 0>(segment_);
+  double y0 = boost::geometry::get<0, 1>(segment_);
+  double x1 = boost::geometry::get<1, 0>(segment_);
+  double y1 = boost::geometry::get<1, 1>(segment_);
   return y0 == y1;
 }
 
 bool GLSegmentShape::isVerticalSegment() const
 {
-  double x0 = bg::get<0, 0>(segment_);
-  double y0 = bg::get<0, 1>(segment_);
-  double x1 = bg::get<1, 0>(segment_);
-  double y1 = bg::get<1, 1>(segment_);
+  double x0 = boost::geometry::get<0, 0>(segment_);
+  double y0 = boost::geometry::get<0, 1>(segment_);
+  double x1 = boost::geometry::get<1, 0>(segment_);
+  double y1 = boost::geometry::get<1, 1>(segment_);
   return x0 == x1;
 }
 
@@ -307,16 +322,18 @@ uint GLSegmentShape::draw(GLView* view,
     pen->setGLPenContext();
   if (drawAt) {
     glPushMatrix();
-    glTranslatef(bg::get<0>(*drawAt), bg::get<1>(*drawAt), 0);
+    glTranslatef(
+        boost::geometry::get<0>(*drawAt), boost::geometry::get<1>(*drawAt), 0);
   }
-  auto llx = bg::get<0, 0>(segment_);
-  auto lly = bg::get<0, 1>(segment_);
-  auto urx = bg::get<1, 0>(segment_);
-  auto ury = bg::get<1, 1>(segment_);
+  auto llx = boost::geometry::get<0, 0>(segment_);
+  auto lly = boost::geometry::get<0, 1>(segment_);
+  auto urx = boost::geometry::get<1, 0>(segment_);
+  auto ury = boost::geometry::get<1, 1>(segment_);
   auto minDrawArea = view->getMinDrawableArea();
 
   uint numShapesDrawn = 0;
-  if (bg::distance(segment_.first, segment_.second) <= minDrawArea) {
+  if (boost::geometry::distance(segment_.first, segment_.second)
+      <= minDrawArea) {
     glBegin(GL_POINTS);
     glVertex2f(llx, lly);
     glEnd();
@@ -368,7 +385,7 @@ GLShape* GLSegmentShape::clone() const
 
 GLCanvasInstShape::GLCanvasInstShape(GLCanvas* cnv,
                                      const GLRectangle& instBBox,
-                                     TxCellOrientType ort)
+                                     odb::dbOrientType ort)
     : GLShape(), masterCanvas_(cnv), instBBox_(instBBox), cellTx_(nullptr)
 {
   // Find out a way to calculate actual Bounding Box of the master canvas with
@@ -379,7 +396,7 @@ GLCanvasInstShape::GLCanvasInstShape(GLCanvas* cnv,
 
 GLCanvasInstShape::GLCanvasInstShape(GLCanvas* cnv,
                                      const ORRect_t& instBBox,
-                                     TxCellOrientType ort)
+                                     odb::dbOrientType ort)
     : GLShape(), masterCanvas_(cnv), instBBox_(instBBox), cellTx_(nullptr)
 {
   // Find out a way to calculate actual Bounding Box of the master canvas with
@@ -411,18 +428,19 @@ uint GLCanvasInstShape::draw(GLView* view,
 
   if (drawAt != nullptr) {
     glPushMatrix();
-    glTranslatef(bg::get<0>(*drawAt), bg::get<1>(*drawAt), 0);
+    glTranslatef(
+        boost::geometry::get<0>(*drawAt), boost::geometry::get<1>(*drawAt), 0);
     txMatrixPushed = true;
   }
 
   auto minC = cnvTxBBox_.min_corner();
   auto maxC = cnvTxBBox_.max_corner();
-  auto llx = bg::get<0>(minC);
-  auto lly = bg::get<1>(minC);
-  auto urx = bg::get<0>(maxC);
-  auto ury = bg::get<1>(maxC);
+  auto llx = boost::geometry::get<0>(minC);
+  auto lly = boost::geometry::get<1>(minC);
+  auto urx = boost::geometry::get<0>(maxC);
+  auto ury = boost::geometry::get<1>(maxC);
   auto minDrawArea = view->getMinDrawableArea();
-  if (bg::area(cnvTxBBox_) <= minDrawArea && shpLayer == -1) {
+  if (boost::geometry::area(cnvTxBBox_) <= minDrawArea && shpLayer == -1) {
     if (shpLayer != -1) {
       if (txMatrixPushed)
         glPopMatrix();
@@ -487,7 +505,7 @@ GLShape* GLCanvasInstShape::clone() const
   return shp;
 }
 
-TxCellOrientType GLCanvasInstShape::getCellOrientation() const
+odb::dbOrientType GLCanvasInstShape::getCellOrientation() const
 {
   return cellTx_->getOrientation();
 }
@@ -523,7 +541,8 @@ uint GLMarkerShape::draw(GLView* view,
     pen->setGLPenContext();
   if (drawAt != nullptr) {
     glPushMatrix();
-    glTranslatef(bg::get<0>(*drawAt), bg::get<1>(*drawAt), 0);
+    glTranslatef(
+        boost::geometry::get<0>(*drawAt), boost::geometry::get<1>(*drawAt), 0);
   }
   if (markerBBox_.area() != 0)
     drawMarkerBBox(view, drawOutlineOnly);

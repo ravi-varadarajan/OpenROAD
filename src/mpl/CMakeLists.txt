@@ -62,7 +62,7 @@ target_link_libraries(mpl
     OpenSTA
     opendb
     utl
-    gui
+    pygui
 )
 
 messages(

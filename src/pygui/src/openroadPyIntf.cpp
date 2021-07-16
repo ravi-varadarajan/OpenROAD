@@ -54,7 +54,7 @@ OpenRoadPythonIntf::OpenRoadPythonIntf()
 {
   assert(_sOrPyIntf == nullptr);  // this is a singleton
   _sOrPyIntf = this;
-  // std::cout << "Python Object Created. Its printed from c++\n" ;
+   std::cout << "Python Object Created. Its printed from c++\n" ;
 }
 
 OpenRoadPythonIntf::~OpenRoadPythonIntf()
@@ -67,6 +67,13 @@ void OpenRoadPythonIntf::displayMessage(const char* msg)
 {
   if (msg)
     std::cout << msg << std::endl << "\n";
+}
+
+void OpenRoadPythonIntf::updateCanvas(GLCanvas* cnv)
+{
+  auto openroadIntf = OpenRoadIntf::getOpenRoadIntfInst();
+  if (cnv->getShapeCountFromAllLayers() == 0)
+    openroadIntf->populateDbCanvas(cnv);
 }
 
 openRoadTclRes OpenRoadPythonIntf::executeTclCommand(const char* cmdStr)
@@ -158,13 +165,11 @@ bool OpenRoadPythonIntf::showObjectInView(std::string objName,
                 || status == odb::dbPlacementStatus::UNPLACED) {
               continue;
             }
-            odb::dbBox* box;
-            for (auto shape_box : termShape->getBoxes()) {
-              box = shape_box;
-              if (shape_box->getTechLayer())
-                 break;
-            }
+            odb::dbSet<odb::dbBox> boxes = termShape->getBoxes();
+            if(boxes.empty())
+               continue;
 
+            odb::dbBox* box = *boxes.begin();
             ORRect_t termShapeBB(
                 ORPoint_t(box->xMin() / defUnits, box->yMin() / defUnits),
                 ORPoint_t(box->xMax() / defUnits, box->yMax() / defUnits));

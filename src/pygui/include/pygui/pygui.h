@@ -38,5 +38,5 @@
 #include <iostream>
 
 namespace OpenRoadUI {
-int start_pygui();
+int start_pyintf(bool gui=true);
 }

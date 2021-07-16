@@ -38,8 +38,9 @@
 #include <string>
 #include <vector>
 
-#include "../include/pygui/openroadGeom.h"
-#include "../include/pygui/openroadUiEnums.h"
+#include "opendb/dbTypes.h"
+#include "pygui/openroadGeom.h"
+#include "pygui/openroadUiEnums.h"
 
 namespace OpenRoadUI {
 // Forward class Declarations
@@ -63,8 +64,6 @@ class GLPointShape;
 
 // Hierarchical Shape
 class GLCanvasInstShape;
-
-// Qualified Shape
 class GLCompositeShape;
 
 // Marker Shape
@@ -106,6 +105,8 @@ class GLShape
   // openDbShape, the dbId shpuld be -1 Or Implementation should match the id
   // form OpenRoadLayoutContext
   std::string getShapeInfo(uint shpInLayer, int odbId = -1) const;
+
+  static void destroyShape(GLShape* shp);
 
  private:
   void* userData_;
@@ -188,6 +189,7 @@ class GLRectShape : public GLShape
 #endif
 
   GLShape* clone() const override;
+  static GLShape* getGLRectShape(const GLRectangle& rect);
 
  private:
 #ifndef SWIG
@@ -246,12 +248,13 @@ class GLCanvasInstShape : public GLShape
  public:
   GLCanvasInstShape(GLCanvas* masterCnv,
                     const GLRectangle& instBBox,
-                    TxCellOrientType ort = R0);
+                    odb::dbOrientType ort = odb::dbOrientType::R0);
 #ifndef SWIG
-  GLCanvasInstShape(GLCanvas* masterCnv,
-                    const ORRect_t& instBBox,
-                    TxCellOrientType ort
-                    = R0);  // BBox is transformed BBox stored in the DB
+  GLCanvasInstShape(
+      GLCanvas* masterCnv,
+      const ORRect_t& instBBox,
+      odb::dbOrientType ort
+      = odb::dbOrientType::R0);  // BBox is transformed BBox stored in the DB
 #endif
   ~GLCanvasInstShape();
 
@@ -274,7 +277,7 @@ class GLCanvasInstShape : public GLShape
   GLCanvas* getMasterCanvas() const { return masterCanvas_; }
   ORRect_t getInstBBox() const { return instBBox_; }
 #endif
-  TxCellOrientType getCellOrientation() const;
+  odb::dbOrientType getCellOrientation() const;
 
  private:
   GLCanvas* masterCanvas_;

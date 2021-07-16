@@ -80,7 +80,7 @@ target_link_libraries(replace
   PRIVATE
     utl
     Eigen3::Eigen
-    gui
+    pygui
     opendb
     OpenSTA
     stt

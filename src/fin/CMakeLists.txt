@@ -56,7 +56,7 @@ target_include_directories(fin
 target_link_libraries(fin
   PRIVATE
     opendb
-    gui
+    pygui
     OpenSTA
     Boost::boost
 )

@@ -47,7 +47,7 @@
 #include "pygui/openroadGeom.h"
 #include "pygui/openroadGlobals.h"
 
-namespace bg = boost::geometry;
+// namespace bg = boost::geometry;
 
 namespace OpenRoadUI {
 void TxOp::transformMatrix(TxMatrix& trMat, bool postApply) const
@@ -101,7 +101,9 @@ void TxScale::apply() const
   std::stringstream oss;
   oss << "Applying Scale : " << scaleVec_;
   DEBUG_PRINT(oss.str());
-  glScalef(bg::get<0>(scaleVec_), bg::get<1>(scaleVec_), bg::get<2>(scaleVec_));
+  glScalef(boost::geometry::get<0>(scaleVec_),
+           boost::geometry::get<1>(scaleVec_),
+           boost::geometry::get<2>(scaleVec_));
 }
 
 TxOp* TxScale::clone() const
@@ -125,13 +127,13 @@ TxOp* TxScale::merge(const TxOp* op) const
   if (scl == nullptr)
     return nullptr;
 
-  auto scaleX = bg::get<0>(scaleVec_);
-  auto scaleY = bg::get<1>(scaleVec_);
-  auto scaleZ = bg::get<2>(scaleVec_);
+  auto scaleX = boost::geometry::get<0>(scaleVec_);
+  auto scaleY = boost::geometry::get<1>(scaleVec_);
+  auto scaleZ = boost::geometry::get<2>(scaleVec_);
 
-  double sclX = scaleX * bg::get<0>(scl->scaleVec_);
-  double sclY = scaleY * bg::get<0>(scl->scaleVec_);
-  double sclZ = scaleZ * bg::get<1>(scl->scaleVec_);
+  double sclX = scaleX * boost::geometry::get<0>(scl->scaleVec_);
+  double sclY = scaleY * boost::geometry::get<0>(scl->scaleVec_);
+  double sclZ = scaleZ * boost::geometry::get<1>(scl->scaleVec_);
 
   if (sclX == 1.0 && sclY == 1.0 && sclZ == 1.0)
     return nullptr;
@@ -143,9 +145,9 @@ TxOp* TxScale::merge(const TxOp* op) const
 void TxRotate::apply() const
 {
   glRotatef(angle_,
-            bg::get<0>(rotateVec_),
-            bg::get<1>(rotateVec_),
-            bg::get<2>(rotateVec_));
+            boost::geometry::get<0>(rotateVec_),
+            boost::geometry::get<1>(rotateVec_),
+            boost::geometry::get<2>(rotateVec_));
 }
 
 TxOp* TxRotate::clone() const
@@ -159,7 +161,8 @@ TxOp* TxRotate::merge(const TxOp* op) const
     return this->clone();
 
   const TxRotate* rot = dynamic_cast<const TxRotate*>(op);
-  if (rot == nullptr || bg::equals(rotateVec_, rot->rotateVec_) == false)
+  if (rot == nullptr
+      || boost::geometry::equals(rotateVec_, rot->rotateVec_) == false)
     return nullptr;
 
   double rotAngle = rotationAngle() + rot->rotationAngle();
@@ -180,9 +183,9 @@ void TxTranslate::apply() const
   std::stringstream oss;
   oss << " Applying Translate : " << translateVec_;
   DEBUG_PRINT(oss.str());
-  glTranslatef(bg::get<0>(translateVec_),
-               bg::get<1>(translateVec_),
-               bg::get<2>(translateVec_));
+  glTranslatef(boost::geometry::get<0>(translateVec_),
+               boost::geometry::get<1>(translateVec_),
+               boost::geometry::get<2>(translateVec_));
 }
 
 TxOp* TxTranslate::clone() const
@@ -200,9 +203,12 @@ TxOp* TxTranslate::merge(const TxOp* op) const
   if (trans == nullptr)
     return nullptr;
 
-  double transX = bg::get<0>(translateVec_) + bg::get<0>(trans->translateVec_);
-  double transY = bg::get<1>(translateVec_) + bg::get<1>(trans->translateVec_);
-  double transZ = bg::get<2>(translateVec_) + bg::get<2>(trans->translateVec_);
+  double transX = boost::geometry::get<0>(translateVec_)
+                  + boost::geometry::get<0>(trans->translateVec_);
+  double transY = boost::geometry::get<1>(translateVec_)
+                  + boost::geometry::get<1>(trans->translateVec_);
+  double transZ = boost::geometry::get<2>(translateVec_)
+                  + boost::geometry::get<2>(trans->translateVec_);
 
   if (transX == 0.0 && transY == 0.0 && transZ == 0.0)
     return nullptr;
@@ -384,20 +390,24 @@ ORPoint_t TxMatrix::transformPoint(const ORPoint_t& coord) const
 {
   ORPoint3D_t pt3d = appendDimension(coord);
   auto txPt = transformPoint(pt3d);
-  return ORPoint_t(bg::get<0>(txPt), bg::get<1>(txPt));
+  return ORPoint_t(boost::geometry::get<0>(txPt),
+                   boost::geometry::get<1>(txPt));
 }
 
 ORPoint3D_t TxMatrix::transformPoint(const ORPoint3D_t& coord) const
 {
-  double xVal = bg::get<0>(coord) * matrix_[0][0]
-                + bg::get<1>(coord) * matrix_[1][0]
-                + bg::get<2>(coord) * matrix_[2][0] + matrix_[3][0];
-  double yVal = bg::get<0>(coord) * matrix_[0][1]
-                + bg::get<1>(coord) * matrix_[1][1]
-                + bg::get<2>(coord) * matrix_[2][1] + matrix_[3][1];
-  double zVal = bg::get<0>(coord) * matrix_[0][2]
-                + bg::get<1>(coord) * matrix_[1][2]
-                + bg::get<2>(coord) * matrix_[2][2] + matrix_[3][2];
+  double xVal = boost::geometry::get<0>(coord) * matrix_[0][0]
+                + boost::geometry::get<1>(coord) * matrix_[1][0]
+                + boost::geometry::get<2>(coord) * matrix_[2][0]
+                + matrix_[3][0];
+  double yVal = boost::geometry::get<0>(coord) * matrix_[0][1]
+                + boost::geometry::get<1>(coord) * matrix_[1][1]
+                + boost::geometry::get<2>(coord) * matrix_[2][1]
+                + matrix_[3][1];
+  double zVal = boost::geometry::get<0>(coord) * matrix_[0][2]
+                + boost::geometry::get<1>(coord) * matrix_[1][2]
+                + boost::geometry::get<2>(coord) * matrix_[2][2]
+                + matrix_[3][2];
 
   return ORPoint3D_t(xVal, yVal, zVal);
 }
@@ -579,38 +589,10 @@ void GLTransform::applyTransform(const ORRect_t& rect)
     return;
   }
 
-  /*
-          std::list<TxOp*> oldInPlaceTransStack = inPlaceOperations_ ;
-          std::list<TxOp*> newTransforms        = inPlaceOperations_ ;
-
-          TxTranslate* reverseTrans = nullptr ;
-          TxTranslate* forwardTrans = nullptr ;
-          if (!inPlaceOperations_.empty()) {
-              ORPoint_t center ;
-              bg::centroid(rect, center) ;
-              ORPoint3D_t centerVec = appendDimension(center) ;
-              ORPoint3D_t invCenterVec = centerVec ;
-              bg::multiply_value(centerVec, -1) ;
-
-              reverseTrans = new TxTranslate(invCenterVec) ;
-              forwardTrans = new TxTranslate(centerVec) ;
-
-              newTransforms.push_back(reverseTrans) ;
-              newTransforms.push_front(forwardTrans) ;
-          }
-
-          std::for_each(newTransforms.begin(), newTransforms.end(), [](TxOp*
-     curOp){ curOp->apply();}) ;
-  */
   std::for_each(operations_.begin(), operations_.end(), [](TxOp* curOp) {
     curOp->apply();
   });
-  /*
-          if (reverseTrans) {
-              delete reverseTrans ;
-              delete forwardTrans ;
-          }
-  */
+
   return;
 }
 
@@ -686,7 +668,7 @@ void GLTransform::populateTransformMatrix(const ORRect_t& visRect)
   currentTxMatrixRect_ = visRect;
 }
 
-GLCellTransform::GLCellTransform(const GLRectangle& rect, TxCellOrientType ort)
+GLCellTransform::GLCellTransform(const GLRectangle& rect, odb::dbOrientType ort)
     : GLTransform(), cellBBox_(rect), cellOrient_(ort)
 {
   pushTransformOperations();
@@ -696,7 +678,8 @@ GLCellTransform::GLCellTransform()
 {
 }
 
-void GLCellTransform::setTransformParams(GLRectangle rect, TxCellOrientType ort)
+void GLCellTransform::setTransformParams(GLRectangle rect,
+                                         odb::dbOrientType ort)
 {
   cellBBox_ = rect;
   cellOrient_ = ort;
@@ -709,23 +692,23 @@ void GLCellTransform::pushTransformOperations()
 
   ORRect_t cellBBox = cellBBox_;
 
-  double llx = bg::get<0>(cellBBox.min_corner());
-  double lly = bg::get<1>(cellBBox.min_corner());
+  double llx = boost::geometry::get<0>(cellBBox.min_corner());
+  double lly = boost::geometry::get<1>(cellBBox.min_corner());
 
-  double urx = bg::get<0>(cellBBox.max_corner());
-  double ury = bg::get<1>(cellBBox.max_corner());
+  double urx = boost::geometry::get<0>(cellBBox.max_corner());
+  double ury = boost::geometry::get<1>(cellBBox.max_corner());
 
   double width = abs(urx - llx);
   double height = abs(ury - lly);
 
-  switch (cellOrient_) {
-    case R0: {
+  switch (cellOrient_.getValue()) {
+    case odb::dbOrientType::R0: {
       ORPoint3D_t transVec(llx, lly, 0);
       TxTranslate* transOp1 = new TxTranslate(transVec);
       operations_.push_front(transOp1);
       break;
     }
-    case MY: {
+    case odb::dbOrientType::MY: {
       ORPoint3D_t transVec1(llx, lly, 0);
       TxTranslate* transOp1 = new TxTranslate(transVec1);
       ORPoint3D_t scaleVec(-1, 1, 1);
@@ -739,7 +722,7 @@ void GLCellTransform::pushTransformOperations()
       operations_.push_front(transOp1);
       break;
     }
-    case R180: {
+    case odb::dbOrientType::R180: {
       ORPoint3D_t transVec1(llx, lly, 0);
       TxTranslate* transOp1 = new TxTranslate(transVec1);
 
@@ -754,7 +737,7 @@ void GLCellTransform::pushTransformOperations()
       operations_.push_front(transOp1);
       break;
     }
-    case MX: {
+    case odb::dbOrientType::MX: {
       ORPoint3D_t transVec1(llx, lly, 0);
       TxTranslate* transOp1 = new TxTranslate(transVec1);
       ORPoint3D_t scaleVec(1, -1, 1);
@@ -768,7 +751,7 @@ void GLCellTransform::pushTransformOperations()
       operations_.push_front(transOp1);
       break;
     }
-    case R270: {
+    case odb::dbOrientType::R270: {
       ORPoint3D_t rotVec(0, 0, 1);
       TxRotate* rotateOp = new TxRotate(270, rotVec, false);
 
@@ -779,7 +762,7 @@ void GLCellTransform::pushTransformOperations()
       operations_.push_front(transOp);
       break;
     }
-    case MYR90: {
+    case odb::dbOrientType::MYR90: {
       ORPoint3D_t rotVec(0, 0, 1);
       TxRotate* rotateOp = new TxRotate(90, rotVec, false);
 
@@ -794,7 +777,7 @@ void GLCellTransform::pushTransformOperations()
       operations_.push_front(transOp);
       break;
     }
-    case R90: {
+    case odb::dbOrientType::R90: {
       ORPoint3D_t rotVec(0, 0, 1);
       TxRotate* rotateOp = new TxRotate(90, rotVec, false);
 
@@ -805,7 +788,7 @@ void GLCellTransform::pushTransformOperations()
       operations_.push_front(transOp);
       break;
     }
-    case MXR90: {
+    case odb::dbOrientType::MXR90: {
       ORPoint3D_t rotVec(0, 0, 1);
       TxRotate* rotateOp = new TxRotate(90, rotVec, false);
 

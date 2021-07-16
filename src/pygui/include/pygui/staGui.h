@@ -45,13 +45,14 @@ namespace sta {
     class Net;
     class Pin;
 }
-namespace OpenRoadUI
+namespace gui
 {
     class guiTimingPath;
     class staGui
     {
     public:
        staGui(ord::OpenRoad* oprd);
+       ~staGui() { }
        
        void                                     findInstances(std::string pattern, std::vector<odb::dbInst*> &insts);
        void                                     findNets(std::string pattern, std::vector<odb::dbNet*> &nets);

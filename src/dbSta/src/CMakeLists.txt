@@ -63,7 +63,7 @@ target_link_libraries(dbSta
   PRIVATE
     OpenSTA
     opendb
-    gui
+    pygui
     utl
 )
 

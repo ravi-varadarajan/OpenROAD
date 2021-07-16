@@ -54,6 +54,18 @@ void OpenRoadLayoutContext::populateLayers() const
   populateTechLayers();
   populateDesignLayers();
 
+  std::vector<uint> allLayerIds;
+  root->getChildLayerIdsRecurse(allLayerIds, false, false, true);
+  uint maxLayerIdx
+      = *(std::max_element(allLayerIds.begin(), allLayerIds.end()));
+
+  std::string wvLayerName("WorldViewerLayer");
+  GLLayer* wvLayer
+      = new GLLayer(wvLayerName, maxLayerIdx + 1, WORLD_VIEW_LAYER, true);
+  root->addChildLayer(wvLayer);
+  GLPen* pen = new GLPen("red", OR_FILL_SOLID_PAT);
+  wvLayer->setLayerPen(pen);
+
   // root->dumpLayers(nullptr, 0);
 }
 
@@ -119,7 +131,7 @@ void OpenRoadLayoutContext::populateTechLayers() const
         GLPen* tpen
             = new GLPen(penColors[colorIdx], penRoutePatterns[routePatternIdx]);
         tl->setLayerPen(tpen);
-
+        tl->setLayerUserData((void*) layer);
         routingLayerCount++;
 
         break;
@@ -131,6 +143,7 @@ void OpenRoadLayoutContext::populateTechLayers() const
         GLPen* tpen
             = new GLPen(penColors[colorIdx], penViaPatterns[viaPatternIdx]);
         tl->setLayerPen(tpen);
+        tl->setLayerUserData((void*) layer);
 
         viaLayerCount++;
 

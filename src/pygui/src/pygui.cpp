@@ -33,48 +33,61 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+#include "pygui/pygui.h"
+
 #include <Python.h>
 
-#include <string>
 #include <cstdio>
+#include <string>
 
 #include "gui/gui.h"
-#include "pygui/pygui.h"
 #include "pygui/MakePyGui.h"
+//#include "pygui/openroadGeom.h"
 #include "pygui/openroadIntf.h"
+#include "pygui/openroadPyIntf.h"
 
 namespace OpenRoadUI {
-   int start_pygui()
-   {
-         //std::cout << "Wow Landed Here\n" ;
 
-         auto orIntf = OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst() ;
-         (void)orIntf ;
+int start_pyintf(bool gui)
+{
+  // std::cout << "Wow Landed Here\n" ;
 
-         Py_Initialize();
+  auto orIntf = OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst();
+  (void) orIntf;
 
-         PyRun_SimpleString("import sys") ;
-         //std::string appendCmd = "sys.path.append('/home/kaushal/MyProjects/OpenROAD-flow-private/tools/OpenROAD/src/pygui')";        
-         //PyRun_SimpleString(appendCmd.c_str()) ;
-         //appendCmd = "sys.path.append('/home/kaushal/MyProjects/OpenROAD-flow-private/tools/build/OpenROAD/src/OpenDB/src/swig/python')";
-         //PyRun_SimpleString("import opendbpy as odb");
+  Py_Initialize();
 
-         PyRun_SimpleString("from pyqtUI.openroadUI import mainwindow as mainwin") ;
-         PyRun_SimpleString("mainwin.main()") ;
+  PyRun_SimpleString("import sys");
+  // std::string appendCmd =
+  // "sys.path.append('/home/kaushal/MyProjects/OpenROAD-flow-private/tools/OpenROAD/src/pygui')";
+  // PyRun_SimpleString(appendCmd.c_str()) ;
+  // appendCmd =
+  // "sys.path.append('/home/kaushal/MyProjects/OpenROAD-flow-private/tools/build/OpenROAD/src/OpenDB/src/swig/python')";
+  // PyRun_SimpleString("import opendbpy as odb");
 
-         Py_Finalize() ;
-         return 1;
-   }
-};
+  if (gui == true) {
+    PyRun_SimpleString("from pyqtUI.openroadUI import mainwindow as mainwin");
+    PyRun_SimpleString("mainwin.main()");
+    Py_Finalize();
+  } else {
+    PyRun_SimpleString("from pyqtUI.openroadUI import orpyInit");
+    PyRun_SimpleString("orpyInit.init()");
+  }
+
+
+  return 1;
+}
+
+};  // namespace OpenRoadUI
 
 namespace ord {
 
-   void initPyGui(ord::OpenRoad* openroad)
-   {
-        auto orIntf = OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst();
-        orIntf->setOpenRoad(openroad);
-   }
-};
+void initPyGui(ord::OpenRoad* openroad)
+{
+  auto orIntf = OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst();
+  orIntf->setOpenRoad(openroad);
+}
+};  // namespace ord
 
 namespace gui {
 
@@ -89,31 +102,81 @@ Gui* gui::Gui::get()
   return singleton_;
 }
 
-void gui::Gui::registerRenderer(gui::Renderer*)
+void gui::Gui::registerRenderer(gui::Renderer* renderer)
 {
+  renderers_.insert(renderer);
+  redraw();
 }
 
-void gui::Gui::unregisterRenderer(gui::Renderer*)
+void gui::Gui::unregisterRenderer(gui::Renderer* renderer)
 {
+  renderers_.erase(renderer);
+  redraw();
 }
 
 void gui::Gui::redraw()
 {
+  auto pyIntf = OpenRoadUI::OpenRoadPythonIntf::get();
+  if (pyIntf != nullptr)
+    pyIntf->redrawLayoutView();
 }
 
 void gui::Gui::pause()
 {
+  auto pyIntf = OpenRoadUI::OpenRoadPythonIntf::get();
+  if (pyIntf != nullptr)
+    pyIntf->pause();
+  std::cout << "Returned back from Python Pause to c++\n" << std::flush;
 }
 
 void Gui::zoomTo(const odb::Rect& rect_dbu)
 {
+  auto pyIntf = OpenRoadUI::OpenRoadPythonIntf::get();
+  if (pyIntf != nullptr) {
+    // OpenRoadUI::GLRectangle zoomRect(
+    //    rect_dbu.xMin(), rect_dbu.yMin(), rect_dbu.xMax(), rect_dbu.yMax());
+    auto openroadIntf = OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst();
+    auto defUnits = openroadIntf->getDefUnits();
+    pyIntf->zoomTo(rect_dbu.xMin() / defUnits,
+                   rect_dbu.yMin() / defUnits,
+                   rect_dbu.xMax() / defUnits,
+                   rect_dbu.yMax() / defUnits);
+  }
 }
 
-void Gui::status(const std::string& /* message */)
+void Gui::status(const std::string& message)
 {
+  auto pyIntf = OpenRoadUI::OpenRoadPythonIntf::get();
+  if (pyIntf != nullptr) {
+    pyIntf->showStatusMessage(message);
+  }
 }
 
 Renderer::~Renderer()
+{
+}
+
+void gui::Gui::addCustomVisibilityControl(const std::string& name,
+                                          bool initially_visible)
+{
+}
+
+bool gui::Gui::checkCustomVisibilityControl(const std::string& name)
+{
+  return false;
+}
+
+Selected Gui::makeSelected(std::any /* object */, void* /* additional_data */)
+{
+  return Selected();
+}
+
+void Gui::setSelected(Selected selection)
+{
+}
+
+void Gui::registerDescriptor(const std::type_info& type,
+                        const Descriptor* descriptor)
 {
 }
 
@@ -122,4 +185,4 @@ Renderer::~Renderer()
   return nullptr;
 }*/
 
-}
+}  // end namespace gui

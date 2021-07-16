@@ -40,7 +40,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../include/pygui/openroadUiEnums.h"
+#include "pygui/openroadUiEnums.h"
 
 #ifndef SWIG
 #include <GL/gl.h>
@@ -120,7 +120,10 @@ class GLPen
 class GLLayer
 {
  public:
-  GLLayer(const std::string& layerName, int layerIdx, ORLayerType layerType);
+  GLLayer(const std::string& layerName,
+          int layerIdx,
+          ORLayerType layerType,
+          bool isInternalLayer = false);
   ~GLLayer();
 
   void addChildLayer(GLLayer* layer);
@@ -128,20 +131,31 @@ class GLLayer
   std::string getLayerName() const;
   ORLayerType getLayerType() const;
   int getLayerIdx() const;
-  int getChildCount() const;
+  int getChildCount(bool includeInternalLayer = false) const;
   GLLayer* getChildLayerAt(uint idx) const;
   void getChildLayerIdsRecurse(std::vector<uint>& childLayerIds,
                                bool checkSelectable = true,
-                               bool checkVisibilty = true) const;
+                               bool checkVisibilty = true,
+                               bool includeInternalLayer = false) const;
 
   void setLayerVisible(bool val);
   void setLayerSelectable(bool val);
   bool isLayerVisible() const { return visible_; }
   bool isLayerSelectable() const { return selectable_; }
+  bool isInternalLayer() const { return internalLayer_; }
 
   void setLayerPen(GLPen* pen);
   GLPen* getLayerPen() const { return layerPen_; }
   void dumpLayers(GLLayer* layer = nullptr, int level = 0);
+
+  std::vector<GLLayer*> getChildLayers() const { return childLayers_; }
+
+  // Following 2 functions should be called only for the top Layer Node
+  std::vector<uint> getWorldViewDrawLayers() const;
+  std::vector<uint> getWorldViewSelectLayers() const;
+
+  void setLayerUserData(void* uData) { layerUserData_ = uData; }
+  void* getLayerUserData() const { return layerUserData_; }
 
   static GLLayer* getLayerAt(uint idx);
   static uint allLayerCount();
@@ -149,7 +163,8 @@ class GLLayer
   static void setRootLayer(GLLayer* root);
   static GLLayer* getRootLayer();
 
-  static GLLayer* createDummyLayerTree();  // Test Function to be removed later
+  static GLLayer* createDummyLayerTree(
+      bool outline = false);  // Test Function to be removed later
 
  private:
   std::string layerName_;
@@ -159,6 +174,7 @@ class GLLayer
   ORLayerType layerType_;
   bool selectable_;
   bool visible_;
+  bool internalLayer_;
 
   // Following members can be NULL, please check before using
   void* layerUserData_;

@@ -98,6 +98,8 @@ class GLView
 
   // The rectangle should be provided in world co-ord.(Rubberband zoom)
   void zoomRect(const GLRectangle& rect);
+  void setVisibleArea(
+      const GLRectangle& rect);  // Existing scaleFactor will be used
   void translate(const GLPoint2D& transVec);
   // Key : Left, Right, Top Bot
   void panKey(ArrowKeyType key);
@@ -165,6 +167,9 @@ class GLView
 
   void startAnimationObject(DrawMotionShapeType motionType,
                             const GLPoint2D& startCoord);
+  void startAnimationObject(GLShape* p_shp,
+                            const GLPoint2D& startCoord,
+                            uint shpLayer);
   bool drawMotionObjs(const GLPoint2D& curCoord);
   void stopAnimation();
   uint getMotionObjectCount() const { return motionShapes_.size(); }
@@ -181,6 +186,20 @@ class GLView
   void setHoldDrawing(bool val) { holdDrawing_ = val; }
   bool isDrawingOnHold() const { return holdDrawing_; }
 
+  void setWorldViewParams(std::vector<uint> drawLayers,
+                          std::vector<uint> selLayers);
+  bool isWorldView() const { return worldView_; }
+  std::vector<uint> getWorldViewDrawLayers() const
+  {
+    return worldViewDrawLayers_;
+  }
+  std::vector<uint> getWorldViewSelectLayers() const
+  {
+    return worldViewSelectLayers_;
+  }
+
+  std::string getViewName() const { return viewName_; }
+
   static GLView* getView(std::string viewName);
 
  private:
@@ -189,6 +208,7 @@ class GLView
   std::string viewName_;  // The name of the view should be unique
 
   GLTransform* viewTransform_;
+  double scaleFactor_;
   GLCanvas* topCanvas_;
   GLRectangle clipRect_;
   GLRectangle fitVisArea_;
@@ -229,6 +249,10 @@ class GLView
   GLPoint2D mousePressedAt_;   // In Device Coords
   GLPoint2D mouseReleasedAt_;  // In Device Coords
   bool motionInProgress_;
+
+  bool worldView_;
+  std::vector<uint> worldViewDrawLayers_;
+  std::vector<uint> worldViewSelectLayers_;
 
   bool updateCurrentViewDepth(
       bool ince

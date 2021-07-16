@@ -33,7 +33,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "../include/pygui/staGui.h"
+#include "pygui/staGui.h"
 #include "ord/OpenRoad.hh"
 
 #include "db_sta/dbSta.hh"
@@ -73,7 +73,7 @@ getRequiredTime(sta::dbSta* staRoot, sta::Pin* term, bool is_rise,
 
 using namespace OpenRoadUI ;
 
-
+namespace gui {
 staGui::staGui(ord::OpenRoad* oprd) : or_(oprd)
 {}
 
@@ -210,3 +210,4 @@ staGui::getPaths(std::vector<guiTimingPath*> &paths, bool get_max, int path_coun
     delete path_ends;
     return true;
 }
+} //namespace gui

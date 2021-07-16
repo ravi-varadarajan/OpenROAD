@@ -69,7 +69,7 @@ target_link_libraries(grt
     ant
     dpl
     dbSta
-    gui
+    pygui
     OpenSTA
     Boost::boost
 )

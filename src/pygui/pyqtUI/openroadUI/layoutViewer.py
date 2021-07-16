@@ -34,13 +34,13 @@
 
 import math
 from PyQt5.QtCore import (QDate, QFile, QIODevice, Qt, QTextStream, QTimer,
-                          QEvent, pyqtSignal, QSize, QRect, QSignalMapper)
-from PyQt5.QtGui import (QFont, QIcon, QKeySequence, QTextCharFormat,
-                         QTextCursor, QTextTableFormat, QPalette, QBrush, QColor, QIcon)
+                          QEvent, pyqtSignal, QSize, QPoint, QRect, QRectF, QSignalMapper)
+from PyQt5.QtGui import (QFont, QIcon, QKeySequence, QTextCharFormat, QPixmap,
+                         QTextCursor, QTextTableFormat, QPalette, QBrush, QColor, QIcon, QPen)
 from PyQt5.QtWidgets import (QAction, QActionGroup, QApplication, QDialog, QDockWidget,
                              QFileDialog, QListWidget, QMainWindow, QMessageBox, QTextEdit,
                              QOpenGLWidget, QTreeView, QGraphicsColorizeEffect, QLabel, QSplitter, QToolButton,
-                             QScrollArea, QWidget, QFrame, QVBoxLayout, QHBoxLayout, QToolBar, QLineEdit, QShortcut, QMenu)
+                             QScrollArea, QWidget, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout, QToolBar, QLineEdit, QShortcut, QMenu)
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -57,6 +57,7 @@ import openroadpy as orp
 from . import openroadGlobals as org
 
 import os
+import sys
 import traceback
 
 from enum import Enum
@@ -67,7 +68,213 @@ DRAW_IN_PYTHON = 'DRAW_IN_PYTHON' in os.environ
 SHOW_SMILEY = 'SHOW_SMILEY' in os.environ
 
 
+class WorldViewGLWidget(QOpenGLWidget):
+    modifyVisibleArea = pyqtSignal(orp.GLRectangle)
+
+    def __init__(self, parent=None):
+        super(WorldViewGLWidget, self).__init__(parent)
+        self.setMouseTracking(True)
+        self.aspect = 1
+        self.width_ = None
+        self.height_ = None
+
+        self.canvas = None
+        self.topLayer = None
+
+        self.mouseClickCoord = None
+        self.curMouseCoord = None
+        self.motionStarted = False
+        self.mouseButton = None
+
+        self.onceOnly = False
+        self.visAreaShp = None
+        self.worldVisLayer = None
+        self.initiatedFromWorldView = False
+
+        self.glView = orp.GLView.getView("WorldView")
+
+    def attachCanvas(self, cnv, visArea=None):
+        self.canvas = cnv
+        self.topLayer = self.canvas.getTopLayerNode()
+        self.glView.setTopCanvas(self.canvas)
+        if visArea is not None:
+            self.glView.clearViewShapes(orp.SELECT_VIEW_SHAPE)
+            if self.visAreaShp is not None:
+                orp.GLShape.destroyShape(self.visAreaShp)
+
+        drawLayers = self.topLayer.getWorldViewDrawLayers()
+        selLayers = self.topLayer.getWorldViewSelectLayers()
+        self.worldVisLayer = selLayers[0]
+        self.visAreaShp = orp.GLRectShape.getGLRectShape(visArea)
+        self.glView.addShapeOnView(self.visAreaShp, self.worldVisLayer)
+        self.glView.setWorldViewParams(drawLayers, selLayers)
+
+    def updateVisibleArea(self, visRect):
+        self.makeCurrent()
+        if self.canvas == None:
+            return
+        self.glView.clearViewShapes(orp.SELECT_VIEW_SHAPE)
+        if self.visAreaShp is not None:
+            orp.GLShape.destroyShape(self.visAreaShp)
+        self.visAreaShp = orp.GLRectShape.getGLRectShape(visRect)
+        self.glView.addShapeOnView(self.visAreaShp, self.worldVisLayer)
+        self.glView.resetPixmaps(False, True)
+        if self.initiatedFromWorldView == False:
+            self.repaint()
+
+    def mouseMoveEvent(self, evt):
+        self.makeCurrent()
+        self.curMouseCoord = orp.GLPoint2D(evt.x(), evt.y())
+        if self.mouseClickCoord != None and self.mouseButton == Qt.LeftButton:
+            curCoord = orp.GLPoint2D(evt.x(), evt.y())
+            if curCoord == self.mouseClickCoord:
+                return
+            elif self.motionStarted == False:
+                self.motionStarted = True
+                self.glView.stopAnimation()
+                #self.glView.startAnimationObject(orp.MOTION_OR_SHAPE, self.mouseClickCoord)
+                self.glView.startAnimationObject(
+                    self.visAreaShp, self.mouseClickCoord, self.worldVisLayer)
+                if self.glView.getMotionObjectCount() == 0:
+                    self.motionStarted = False
+                    self.glView.stopAnimation()
+            else:
+                self.repaint()
+
+    def mousePressEvent(self, evt):
+        self.makeCurrent()
+        self.setFocus()
+        self.setFocusPolicy(Qt.StrongFocus)
+        x = evt.x()
+        y = evt.y()
+        self.mouseClickCoord = orp.GLPoint2D(x, y)
+        self.glView.setMouseClickedCoord(self.mouseClickCoord)
+        self.motionStarted = False
+        self.mouseButton = evt.button()
+        evt.accept()
+
+    def mouseReleaseEvent(self, evt):
+        self.makeCurrent()
+        self.setFocus()
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.mouseButton = None
+        mouseReleaseCoord = orp.GLPoint2D(evt.x(), evt.y())
+        self.initiatedFromWorldView = True
+        if evt.button() == Qt.LeftButton and self.mouseClickCoord != mouseReleaseCoord:
+            mouseClickStart = self.glView.getWorldCoord(self.mouseClickCoord)
+            mouseClickEnd = self.glView.getWorldCoord(mouseReleaseCoord)
+            transX = mouseClickStart.x() - mouseClickEnd.x()
+            transY = mouseClickStart.y() - mouseClickEnd.y()
+            if self.visAreaShp is not None:
+                visArea = self.visAreaShp.getBoundingBox()
+                newVisArea = visArea.translate(-transX, -transY)
+            self.glView.stopAnimation()
+            if self.visAreaShp is not None:
+                self.modifyVisibleArea.emit(newVisArea)
+            self.motionStarted = False
+            self.mouseClickCoord = None
+        self.repaint()
+        self.initiatedFromWorldView = False
+        evt.accept()
+
+    def initializeGL(self):
+        glEnable(GL_DEPTH_TEST)
+        glClearColor(0.0, 0.0, 0.0, 0.0)
+        glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
+
+        glShadeModel(GL_FLAT)
+        glClearDepth(1.0)
+        glDepthFunc(GL_ALWAYS)
+        glEnable(GL_DEPTH_TEST)
+
+        glReadBuffer(GL_BACK)
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+
+    def resizeGL(self, width, height):
+        if height == 0:
+            self.height_ = 1
+        self.width_ = width
+        self.height_ = height
+        self.aspect = width/height
+        glViewport(0, 0, width, height)
+        self.glView.setViewPortDimensions(self.width_, self.height_)
+
+    def paintGL(self):
+        self.makeCurrent()
+        if self.motionStarted == False:
+            self.glView.setViewPortDimensions(self.width_, self.height_)
+        try:
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        except BaseException as e:
+            org.printDebugMsg(f"Encountered Exception line 124 {str(e)}")
+
+        if self.motionStarted == False:
+            self.glView.draw()
+        else:
+            self.glView.drawMotionObjs(self.curMouseCoord)
+        return
+
+
+class WorldViewer(QDialog):
+    modifyVisibleArea = pyqtSignal(orp.GLRectangle)
+    layoutVisAreaChanged = pyqtSignal(orp.GLRectangle)
+
+    def __init__(self, parent=None):
+        super(WorldViewer, self).__init__(parent)
+
+        self.showGraphicsScene = False
+
+        self.gridLayout = QGridLayout(self)
+        self.frame = QFrame(self)
+        self.frame.setFrameShape(QFrame.WinPanel)
+        self.frame.setFrameShadow(QFrame.Raised)
+
+        self.gridLayout_2 = QGridLayout(self.frame)
+        self.worlViewWidget = WorldViewGLWidget(self.frame)
+        self.gridLayout_2.addWidget(self.worlViewWidget, 0, 0, 1, 1)
+        self.gridLayout.addWidget(self.frame, 0, 0, 1, 1)
+
+        if self.showGraphicsScene:
+            self.scene = QGraphicsScene()
+            self.graphicView = QGraphicsView(self.scene, self)
+
+            self.cnvBrush = QBrush(Qt.gray)
+            self.cnvBrush.setStyle(Qt.Dense6Pattern)
+
+            self.viewBrush = QBrush(Qt.yellow)
+            self.viewBrush.setStyle(Qt.DiagCrossPattern)
+
+            self.cnvPen = QPen(Qt.red)
+            self.viewPen = QPen(Qt.green)
+        self.setFixedSize(300, 300)
+        self.setWindowTitle("World View")
+
+        self.worlViewWidget.modifyVisibleArea.connect(
+            lambda newVisRect: self.modifyVisibleArea.emit(newVisRect))
+
+    def showWorldCanvas(self, cnv, visArea):
+        self.worlViewWidget.attachCanvas(cnv, visArea)
+
+    def showEvent(self, evt):
+        self.worlViewWidget.glView.resetPixmaps()
+        self.worlViewWidget.repaint()
+        evt.accept()
+
+    def buildScene(self, cnvRect, visArea):
+        self.scene.clear()
+        self.graphicView.setGeometry(0, 0, cnvRect.width(), cnvRect.height())
+        self.visRect = self.scene.addRect(
+            visArea, self.viewPen, self.viewBrush)
+        self.cnvRect = self.scene.addRect(cnvRect, self.cnvPen, self.cnvBrush)
+        self.visRect.setFlag(QGraphicsItem.ItemIsMovable)
+
+    def updateVisArea(self, visRect):
+        self.worlViewWidget.updateVisibleArea(visRect)
+
+
 class LayoutWindow(QWidget):
+    layoutVisibleAreaChanged = pyqtSignal(orp.GLRectangle)
+
     def __init__(self, parent):
         super(LayoutWindow, self).__init__(parent)
 
@@ -106,6 +313,34 @@ class LayoutWindow(QWidget):
         self.findMapParams = dict(zip(self.objTypeStrs + self.viewTypeStr,
                                       [orp.DB_INSTANCE, orp.DB_NET, orp.DB_PIN,
                                        orp.SELECT_OBJECT, orp.HIGHLIGHT_OBJECT, orp.LOCATE_OBJECT]))
+
+        self.shortcut_worldview = QShortcut(QKeySequence('Ctrl+W'), self)
+        self.shortcut_worldview.activated.connect(self.showWorldView)
+
+        self.worldView_ = WorldViewer(self)
+
+        self.worldView_.modifyVisibleArea.connect(self.updateVisibleArea)
+        self.layoutVisibleAreaChanged.connect(
+            lambda visRect: self.worldView_.updateVisArea(visRect))
+
+    def updateVisibleArea(self, newVisArea):
+        self.layoutViewer.glView.setVisibleArea(newVisArea)
+        self.layoutViewer.repaint()
+        updatedVisArea = self.layoutViewer.glView.getVisibleArea()
+        self.layoutVisibleAreaChanged.emit(updatedVisArea)
+
+    def showWorldView(self):
+        if self.layoutViewer.canvas == None:
+            return
+        self.worldView_.showWorldCanvas(
+            self.layoutViewer.canvas, self.layoutViewer.getVisibleArea())
+        self.worldView_.show()
+
+    def getLayoutPixmap(self):
+        return self.layoutViewer.grab()
+
+    def resizeEvent(self, evt):
+        self.worldView_.hide()
 
     def repaintView(self):
         self.layoutViewer.applyViewOp(
@@ -308,8 +543,8 @@ class LayoutViewer(QtOpenGL.QGLWidget):
     canvasConnected = pyqtSignal(orp.GLCanvas)
 
     def __init__(self, parent=None):
-        super(LayoutViewer, self).__init__()
-        self.parent = parent
+        super(LayoutViewer, self).__init__(parent)
+        #self.parent = parent
         self.setMouseTracking(True)
         self.width = self.width()
         self.height = self.height()
@@ -329,7 +564,7 @@ class LayoutViewer(QtOpenGL.QGLWidget):
         self.curSelShpIndx = 0
 
         org.OpenRoadGlobals.openRoadLayoutViewer = self
-        self.canvas = None
+        #self.canvas = None
         self.glView = orp.GLView.getView("layoutView")
 
         self.mouseMoveEvent = self.handleMouseMoveEvent
@@ -342,6 +577,7 @@ class LayoutViewer(QtOpenGL.QGLWidget):
         self.canvas = cnv
         self.topLayer = self.canvas.getTopLayerNode()
         self.glView.setTopCanvas(self.canvas)
+        self.parent().worldView_.hide()
         self.canvasConnected.emit(self.canvas)
 
     def showSmileyCanvas(self):
@@ -350,6 +586,12 @@ class LayoutViewer(QtOpenGL.QGLWidget):
         self.glView.setTopCanvas(self.canvas)
         self.canvasConnected.emit(self.canvas)
 
+    def getVisibleArea(self):
+        self.makeCurrent()
+        visArea = self.glView.getVisibleArea()
+        self.doneCurrent()
+        return visArea
+
     def minimumSizeHint(self):
         return QSize(50, 50)
 
@@ -357,6 +599,7 @@ class LayoutViewer(QtOpenGL.QGLWidget):
         return QSize(400, 400)
 
     def handleMouseMoveEvent(self, evt):
+        self.makeCurrent()
         self.curMouseCoord = orp.GLPoint2D(evt.x(), evt.y())
 
         if self.glView.getTopCanvas() != None:
@@ -395,6 +638,7 @@ class LayoutViewer(QtOpenGL.QGLWidget):
             evt.button(), evt.x(), evt.y()))
 
     def handleMousePressEvent(self, evt):
+        self.makeCurrent()
         self.setFocus()
         self.setFocusPolicy(Qt.StrongFocus)
         x = evt.x()
@@ -422,6 +666,7 @@ class LayoutViewer(QtOpenGL.QGLWidget):
         org.OpenRoadGlobals.get_main_window().showStatusMessage(shpInfo)
 
     def handleMouseReleaseEvent(self, evt):
+        self.makeCurrent()
         self.mouseButton = None
         mouseReleaseCoord = orp.GLPoint2D(evt.x(), evt.y())
         if evt.button() == Qt.LeftButton:
@@ -445,6 +690,7 @@ class LayoutViewer(QtOpenGL.QGLWidget):
             self.mouseClickCoord = None
             self.repaint()
             self.showSelectedShapeInfo()
+            self.parent().layoutVisibleAreaChanged.emit(self.glView.getVisibleArea())
             return
         elif evt.button() == Qt.RightButton:
             clickDist = self.mouseClickCoord.distance(mouseReleaseCoord)
@@ -464,6 +710,7 @@ class LayoutViewer(QtOpenGL.QGLWidget):
             self.glView.zoomRect(rectToZoom)
             self.mouseClickCoord = None
             self.repaint()
+            self.parent().layoutVisibleAreaChanged.emit(self.glView.getVisibleArea())
             # Handle Rubberband Rectangle zoomRect here
         elif evt.button() == Qt.MiddleButton:
             if self.mouseClickCoord == mouseReleaseCoord:
@@ -480,8 +727,10 @@ class LayoutViewer(QtOpenGL.QGLWidget):
             evt.button(), evt.x(), evt.y()))
 
     def applyViewOp(self, viewOp):
+        self.makeCurrent()
         viewOp()
         self.repaint()
+        self.parent().layoutVisibleAreaChanged.emit(self.glView.getVisibleArea())
 
     def handleKeyPressEvent(self, evt):
         if evt.key() == Qt.Key_Control:
@@ -564,7 +813,6 @@ class LayoutViewer(QtOpenGL.QGLWidget):
         self.width = width
         self.height = height
         self.aspect = width/height
-        self.doDraw = False
         glViewport(0, 0, width, height)
         if DRAW_IN_PYTHON == False:
             if self.glView.getTopCanvas() != None:
@@ -572,11 +820,6 @@ class LayoutViewer(QtOpenGL.QGLWidget):
         if self.glView is not None:
             self.glView.resetPixmaps()
         self.widgetResized = True
-
-    def paintEater(self):
-        self.paintTimerApplied = False
-        self.doDraw = True
-        self.repaint()
 
     def paintGL(self):
         if DRAW_IN_PYTHON:
@@ -587,22 +830,13 @@ class LayoutViewer(QtOpenGL.QGLWidget):
             self.widgetResized = False
             return
         if self.motionStarted == False:
-            if True or self.doDraw:
-                if self.glView.getTopCanvas() == None:
-                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-                    glFlush()
-                    glFinish()
-                    return
-                self.glView.draw()
-                glFlush()
-                glFinish()
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            if self.glView.getTopCanvas() == None:
                 return
-            self.paintTimerApplied = True
+            self.glView.draw()
             return
         else:
             self.glView.drawMotionObjs(self.curMouseCoord)
-        glFlush()
-        glFinish()
         return
 
     def render(self):

@@ -51,19 +51,6 @@ enum TxOpType
   TRANSLATION_TX
 };
 
-// One to One Correspondence with odb::dbOrientType::Value
-enum TxCellOrientType
-{
-  R0 = 0, /** rotate object 0 degrees */
-  R90,    /** rotate object 90 degrees */
-  R180,   /** rotate object 180 degrees */
-  R270,   /** rotate object 270 degrees */
-  MY,     /** mirror about the "Y" axis */
-  MYR90,  /** mirror about the "Y" axis and rotate 90 degrees */
-  MX,     /** mirror about the "X" axis */
-  MXR90   /** mirror about the "X" axis and rotate 90 degrees */
-};
-
 enum ORShapeType
 {
   OR_ABSTRACT_SHAPE = 0,
@@ -74,9 +61,6 @@ enum ORShapeType
   OR_POINT_SHAPE,
   OR_CANVASINST_SHAPE,
   OR_COMPOSITE_SHAPE,
-  // Qualified Shape
-  OR_QUALIFIED_SHAPE,  // It will have actual Shape and the Layer Object, where
-                       // it exists
   OR_MARKER_SHAPE
 };
 
@@ -123,6 +107,8 @@ enum ORLayerType
   DUMMY_LAYER_5,
   DUMMY_LAYER_6,
 
+  BACKGROUND_LAYER,
+
   DESIGN_LAYER = 500,
   DESIGN_INSTANCE_LAYER,
   DESIGN_CELLTYPE_LAYER,
@@ -136,7 +122,9 @@ enum ORLayerType
   DESIGN_IO_LAYER,
 
   METAL_LAYER,
-  VIA_LAYER
+  VIA_LAYER,
+
+  WORLD_VIEW_LAYER
 };
 
 enum DrawViewShapeType

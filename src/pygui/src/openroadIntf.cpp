@@ -35,8 +35,11 @@
 
 #include "pygui/openroadIntf.h"
 
+#include <GL/gl.h>
+
 #include <iostream>
 
+#include "gui/gui.h"
 #include "opendb/db.h"
 #include "opendb/dbShape.h"
 #include "pygui/openroadCanvas.h"
@@ -44,7 +47,10 @@
 #include "pygui/openroadLayoutContext.h"
 #include "pygui/openroadPyIntf.h"
 #include "pygui/openroadShape.h"
+#include "pygui/openroadView.h"
+#include "pygui/pygui.h"
 #include "pygui/staGui.h"
+extern bool pygui_mode; // from Main.cc
 
 // using namespace OpenRoadUI ;
 #define SKIP_POWERGROUND 1
@@ -59,6 +65,197 @@ void channelWatchPy(ClientData instanceData, int mask)
 {
   // watch is not supported inside OpenROAD GUI
 }
+
+namespace gui {
+
+class PyGuiPainter : public Painter
+{
+ public:
+  PyGuiPainter(OpenRoadUI::GLView* view, OpenRoadUI::GLCanvas* cnv)
+      : view_(view), canvas_(cnv), lastColor_(0, 0, 0)
+  {
+    auto topLayer = canvas_->getTopLayerNode();
+    std::vector<uint> childLayerIds;
+    topLayer->getChildLayerIdsRecurse(childLayerIds, false, false);
+    for (auto layerIdx : childLayerIds) {
+      auto glLayer = OpenRoadUI::GLLayer::getLayerAt(layerIdx);
+      if (glLayer->getLayerUserData() == nullptr)
+        continue;
+      odb::dbTechLayer* techLayer
+          = static_cast<odb::dbTechLayer*>(glLayer->getLayerUserData());
+      layerMap_[techLayer] = glLayer;
+    }
+    intfInst_ = OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst();
+    defUnits = intfInst_->getDefUnits();
+    defUnitsSq = defUnits * defUnits;
+    GLubyte* pattern
+        = OpenRoadUI::GLPen::getPenBytePattern(OpenRoadUI::OR_FILL_SOLID_PAT);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glEnable(GL_POLYGON_STIPPLE);
+    glPolygonStipple(pattern);
+  }
+
+  Color getPenColor()
+  {
+    Color c;
+    return c;
+  }
+
+  void setPen(odb::dbTechLayer* layer, bool cosmetic) override
+  {
+    // std::cout
+    //    << "PyGuiPainter> Came to Set Pen for dbTechLayer with cosmetic = "
+    //    << cosmetic << std::endl;
+    if (layerMap_.find(layer) == layerMap_.end())
+      return;
+    auto glLayer = layerMap_[layer];
+    glLayer->getLayerPen()->setGLPenContext();
+  }
+
+  void setPen(const Color& color, bool cosmetic, int width) override
+  {
+    // std::cout << "PyGuiPainter> Came to Set Pen with Color and with cosmetic
+    // = "
+    //          << cosmetic << std::endl;
+    // if (color.r == lastColor_.r && color.g == lastColor_.g
+    //    && color.b == lastColor_.b && color.a == lastColor_.a)
+    //  return;
+    // glColor4i(color.r, color.g, color.b, color.a);
+    glColor4f(
+        color.r / 255.0, color.g / 255.0, color.b / 255.0, color.a / 255.0);
+    // OpenRoadUI::ColorParams cParams(
+    //    color.r / 255.0, color.g / 255.0, color.b / 255.0, color.a / 255.0);
+    // OpenRoadUI::GLPen glPen(cParams, OpenRoadUI::OR_FILL_SOLID_PAT);
+    // glPen.setGLPenContext();
+  }
+
+  void setPenWidth(int width)
+  {
+
+  }
+  void setBrush(odb::dbTechLayer* layer, int alpha) override
+  {
+    // std::cout << "PyGuiPainter> Came to Set Brush for dbTechLayer with alpha
+    // = "
+    //          << alpha << std::endl;
+    if (layerMap_.find(layer) == layerMap_.end())
+      return;
+    auto glLayer = layerMap_[layer];
+    glLayer->getLayerPen()->setGLPenContext();
+  }
+
+  void setBrush(const Color& color) override
+  {
+    // std::cout << "PyGuiPainter> Came to Set Brush with color\n";
+    // if (color.r == lastColor_.r && color.g == lastColor_.g
+    //    && color.b == lastColor_.b && color.a == lastColor_.a)
+    //  return;
+    // glColor4i(color.r, color.g, color.b, color.a);
+    glColor4f(
+        color.r / 255.0, color.g / 255.0, color.b / 255.0, color.a / 255.0);
+    // OpenRoadUI::ColorParams cParams(
+    //    color.r / 255.0, color.g / 255.0, color.b / 255.0, color.a / 255.0);
+    // OpenRoadUI::GLPen glPen(cParams, OpenRoadUI::OR_FILL_SOLID_PAT);
+    // glPen.setGLPenContext();
+  }
+
+  void drawGeomShape(const odb::GeomShape* shape) override
+  {
+    std::cout << "PyGuiPainter> Came to Draw GeomShape\n";
+    // TBD
+  }
+
+  void drawRect(const odb::Rect& rect, int roundX, int roundY) override
+  {
+    if (false
+        && const_cast<odb::Rect&>(rect).area() / defUnitsSq
+               <= view_->getMinDrawableArea()) {
+      glBegin(GL_POINTS);
+      glVertex2f(rect.xMin() / defUnits, rect.yMin() / defUnits);
+      glEnd();
+      return;
+    }
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    auto llx = rect.xMin() / defUnits;
+    auto lly = rect.yMin() / defUnits;
+    auto urx = rect.xMax() / defUnits;
+    auto ury = rect.yMax() / defUnits;
+
+    glRectf(llx, lly, urx, ury);
+
+    // Now draw the rectangle for the boundary.
+    // glBegin(GL_LINE_LOOP);
+    // glVertex2f(llx, lly);
+    // glVertex2f(urx, lly);
+    // glVertex2f(urx, ury);
+    // glVertex2f(llx, ury);
+    // glEnd();
+    // auto intfInst = OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst();
+    // OpenRoadUI::GLRectangle glRect(rect.xMin() / intfInst->getDefUnits(),
+    //                               rect.yMin() / intfInst->getDefUnits(),
+    //                               rect.xMax() / intfInst->getDefUnits(),
+    //                               rect.yMax() / intfInst->getDefUnits());
+    // std::cout << "PyGuiPainter> Came to Draw Rect : " << glRect.repr();
+    // OpenRoadUI::GLRectShape rectShp(glRect);
+    // rectShp.draw(view_, -1);
+  }
+
+  void drawLine(const odb::Point& p1, const odb::Point& p2) override
+  {
+    if (false
+        && odb::Point::manhattanDistance(p1, p2) / defUnits
+               <= view_->getMinDrawableArea()) {
+      glBegin(GL_POINTS);
+      glVertex2f(p1.getX() / defUnits, p1.getY() / defUnits);
+      glEnd();
+      return;
+    }
+    glBegin(GL_LINES);
+    glVertex2f(p1.getX() / defUnits, p1.getY() / defUnits);
+    glVertex2f(p2.getX() / defUnits, p2.getY() / defUnits);
+    glEnd();
+    return;
+    // auto intfInst = OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst();
+    // OpenRoadUI::GLSegment seg(
+    //    OpenRoadUI::GLPoint2D(p1.getX() / intfInst->getDefUnits(),
+    //                          p1.getY() / intfInst->getDefUnits()),
+    //    OpenRoadUI::GLPoint2D(p2.getX() / intfInst->getDefUnits(),
+    //                          p2.getY() / intfInst->getDefUnits()));
+    // std::cout << "PyGuiPainter> Came to Draw Line : " << seg.repr();
+    // OpenRoadUI::GLSegmentShape segShp(seg);
+    // segShp.draw(view_, -1);
+  }
+  void drawCircle(int x, int y, int r) override
+  {
+
+  }
+
+  void drawString(int x, int y, int offset, const std::string& s) override
+  {
+
+  }
+
+  void drawRuler(int x0, int y0, int x1, int y1) override
+  {
+
+  }
+
+  void setTransparentBrush() override
+  {
+
+  }
+
+ private:
+  OpenRoadUI::GLView* view_;
+  OpenRoadUI::GLCanvas* canvas_;
+  Color lastColor_;
+  OpenRoadUI::OpenRoadIntf* intfInst_;
+  double defUnits;
+  double defUnitsSq;
+  // GLubyte* pattern_;
+  std::map<odb::dbTechLayer*, OpenRoadUI::GLLayer*> layerMap_;
+};
+}  // end namespace gui
 
 namespace OpenRoadUI {
 
@@ -98,6 +295,9 @@ OpenRoadIntf::OpenRoadIntf()
       changedInsts_(0)
 {
   // std::cout << "Built OpenRoadIntf Singleton Object\n" ;
+  if (pygui_mode == false)
+    return;
+
   setupTcl();
   auto* open_road = ord::OpenRoad::openRoad();
   open_road->addObserver(this);
@@ -118,7 +318,7 @@ void OpenRoadIntf::setOpenRoad(ord::OpenRoad* openroad)
   _openroad = openroad;
   if (_dbGuiIntf)
     delete _dbGuiIntf;
-  _dbGuiIntf = new staGui(_openroad);
+  _dbGuiIntf = new gui::staGui(_openroad);
 }
 
 void OpenRoadIntf::postReadLef(odb::dbTech* tech, odb::dbLib* library)
@@ -140,11 +340,55 @@ void OpenRoadIntf::findPins(std::string pattern,
   return;
 }
 
+void OpenRoadIntf::drawExternalRenderersForLayer(GLView* view,
+                                                 GLLayer* layer,
+                                                 GLCanvas* canvas)
+{
+  // std::cout << "Came to Draw Shape from External Renderer for Layer "
+  //          << layer->getLayerName() << " in view : " << view->getViewName()
+  //          << std::endl
+  //          << std::flush;
+  auto layerUserData = layer->getLayerUserData();
+  if (view->getViewName() != "layoutView" || layerUserData == nullptr) {
+    // std::cout << "Skipping External Renderer Draw\n" << std::flush;
+    return;
+  }
+  odb::dbTechLayer* techLayer = static_cast<odb::dbTechLayer*>(layerUserData);
+  // Create a Local Painter
+  gui::PyGuiPainter guiPainter(view, canvas);
+  auto& renderers = gui::Gui::get()->renderers();
+  int idx = 1;
+  for (auto* renderer : renderers) {
+    // std::cout << "DRAWING RENDERER " << idx++
+    //          << " For Layer : " << layer->getLayerName() << std::endl
+    //          << std::flush;
+    renderer->drawLayer(techLayer, guiPainter);
+  }
+  // TBD
+}
+
+void OpenRoadIntf::drawExternalRenderersForObjects(GLView* view,
+                                                   GLCanvas* canvas)
+{
+  if (view->getViewName() != "layoutView") {
+    // std::cout << "Skipping External Renderer Draw\n" << std::flush;
+    return;
+  }
+  gui::PyGuiPainter guiPainter(view, canvas);
+  auto& renderers = gui::Gui::get()->renderers();
+  int idx = 1;
+  for (auto* renderer : renderers) {
+    // std::cout << "DRAWING RENDERER " << idx++ << " For Objects " << std::endl
+    //          << std::flush;
+    renderer->drawObjects(guiPainter);
+  }
+}
+
 void OpenRoadIntf::postReadDef(odb::dbBlock* block)
 {
   auto db = block->getChip()->getDb();
-  // std::cout << "OpenRoadIntf::Observer Got the event postReadDb with dbId = "
-  // << dbId <<std::endl ;
+  std::cout << "OpenRoadIntf::Observer Got the event postReadDef with dbId = "
+            << std::endl;
   delete _p_cnv;
   _p_cnv = nullptr;
   buildDbCanvas(db);
@@ -154,7 +398,7 @@ void OpenRoadIntf::postReadDef(odb::dbBlock* block)
 
 void OpenRoadIntf::postReadDb(odb::dbDatabase* db)
 {
-  // std::cout << "OpenRoadIntf::Observer Got the event postReadDb in C++\n" ;
+  std::cout << "OpenRoadIntf::Observer Got the event postReadDb in C++\n";
   auto dbId = db->getId();
   // std::cout << "OpenRoadIntf::Observer Got the event postReadDb with dbId = "
   // << dbId <<std::endl ;
@@ -208,8 +452,25 @@ void OpenRoadIntf::buildDbCanvas(odb::dbDatabase* db_)
   }
 
   _p_cnv = new GLCanvas(topLayer, "OR");
-
+  _p_cnv->setUserData((void*) db_);
   std::cout << "Created empty Canvas..." << std::endl;
+  populateDbCanvas(_p_cnv);
+  return;
+}
+
+void OpenRoadIntf::populateDbCanvas(GLCanvas* _p_cnv)
+{
+  if (_p_cnv->getUserData() == nullptr)
+    return;
+  odb::dbDatabase* db_ = static_cast<odb::dbDatabase*>(_p_cnv->getUserData());
+  odb::dbChip* chip = db_->getChip();
+  if (!chip) {
+    return;
+  }
+
+  _p_cnv->clearCanvasLayer(-1, true);
+
+  std::cout << "Populating Canvas..." << std::endl;
 
   _p_cnv->setBlockOp(true);
   addDieToCanvas(block_, _p_cnv);
@@ -270,7 +531,8 @@ void OpenRoadIntf::addDieToCanvas(odb::dbBlock* block, GLCanvas* cnv)
 
   odb::Rect dieBox;
   block->getDieArea(dieBox);
-
+  if (dieBox.area() == 0)
+    return;
   canvasBox.merge(dieBox);
   ORRect_t shapeToAdd(ORPoint_t(canvasBox.xMin() / getDefUnits(),
                                 canvasBox.yMin() / getDefUnits()),
@@ -468,16 +730,11 @@ void OpenRoadIntf::addSNetToCanvas(odb::dbNet* net, GLCanvas* cnv)
 
 void OpenRoadIntf::addTermToCanvas(odb::dbBPin* pin, GLCanvas* cnv)
 {
-  odb::dbBox* box = nullptr;
-  for (auto pin_box: pin->getBoxes()) {
-    if (!pin_box->getTechLayer())
-      continue;
-    box = pin_box;
-    break;
-  }
-  if (!box) {
-    return;
-  }
+  odb::dbSet<odb::dbBox> boxes = pin->getBoxes();
+  if(boxes.empty())
+     return;
+
+  odb::dbBox* box = *boxes.begin();
 
   GLRectangle shapeRect(
       ORPoint_t(box->xMin() / getDefUnits(), box->yMin() / getDefUnits()),
@@ -515,11 +772,9 @@ void OpenRoadIntf::addInstToCanvas(odb::dbInst* inst, GLCanvas* cnv)
               << master->getConstName() << std::endl;
     return;
   }
-  TxCellOrientType viewerOrient;
   odb::dbOrientType dbOrient = inst->getOrient();
-  db2ViewerOrient(dbOrient, viewerOrient);
   GLCanvasInstShape* instShape
-      = new GLCanvasInstShape(masterCanvas, shapeToAdd, viewerOrient);
+      = new GLCanvasInstShape(masterCanvas, shapeToAdd, dbOrient);
   instShape->setUserData((void*) inst);
   (void) cnv->addShape(instShape, layerIdx);
 }
@@ -540,6 +795,8 @@ void OpenRoadIntf::addFillsToCanvas(odb::dbBlock* block, GLCanvas* cnv)
 
 double OpenRoadIntf::getDefUnits()
 {
+  if (block_ == nullptr)
+    return 1.0;
   return 1.0 * (block_->getDbUnitsPerMicron());
 }
 
@@ -548,37 +805,6 @@ double OpenRoadIntf::getLefUnits()
   return 1.0 * (tech_->getDbUnitsPerMicron());
   // return block_->getDbUnitsPerMicron();
   // return 1.0;
-}
-
-void OpenRoadIntf::db2ViewerOrient(odb::dbOrientType dbOr,
-                                   TxCellOrientType& viewerOr)
-{
-  switch (dbOr) {
-    case odb::dbOrientType::R0:
-      viewerOr = TxCellOrientType::R0;
-      break;
-    case odb::dbOrientType::R90:
-      viewerOr = TxCellOrientType::R90;
-      break;
-    case odb::dbOrientType::R180:
-      viewerOr = TxCellOrientType::R180;
-      break;
-    case odb::dbOrientType::R270:
-      viewerOr = TxCellOrientType::R270;
-      break;
-    case odb::dbOrientType::MY:
-      viewerOr = TxCellOrientType::MY;
-      break;
-    case odb::dbOrientType::MYR90:
-      viewerOr = TxCellOrientType::MYR90;
-      break;
-    case odb::dbOrientType::MX:
-      viewerOr = TxCellOrientType::MX;
-      break;
-    case odb::dbOrientType::MXR90:
-      viewerOr = TxCellOrientType::MXR90;
-      break;
-  }
 }
 
 void OpenRoadIntf::printMessageInPython(const std::string& msg)

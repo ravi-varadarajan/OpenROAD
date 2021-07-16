@@ -64,7 +64,7 @@ target_link_libraries(rsz
     OpenSTA
     dbSta
     grt
-    gui
+    pygui
     pdr
     utl
 )

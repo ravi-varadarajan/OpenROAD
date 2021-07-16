@@ -59,6 +59,7 @@ GLView::GLView(std::string viewName)
       height_(100),
       viewName_(viewName),
       viewTransform_(nullptr),
+      scaleFactor_(1.0),
       topCanvas_(nullptr),
       canvasPixmapDirty_(true),
       viewPixmapDirty_(true),
@@ -79,7 +80,8 @@ GLView::GLView(std::string viewName)
       holdDrawing_(false),
       mousePressedAt_(),
       mouseReleasedAt_(),
-      motionInProgress_(false)
+      motionInProgress_(false),
+      worldView_(false)
 {
   viewTransform_ = new GLTransform();
 
@@ -144,6 +146,7 @@ void GLView::setTopCanvas(GLCanvas* cnv)
   SET_FLAG(HIGHLIGHT_VIEW_SHAPE, shpTypeFlags);
   SET_FLAG(MARKER_VIEW_SHAPE, shpTypeFlags);
   clearViewShapes(shpTypeFlags);
+  fit();
 }
 
 GLPoint2D GLView::getWorldCoord(const GLPoint2D& devCoord) const
@@ -419,12 +422,49 @@ void GLView::zoomRect(const GLRectangle& zRect)
 
   auto visRectWidth = rectWidth(curVisArea);
   auto visRectHeight = rectHeight(curVisArea);
-  GLfloat scaleFactor
+  scaleFactor_
       = static_cast<GLfloat>(std::min(visRectWidth * 1.0 / scaleRectWidth,
                                       visRectHeight * 1.0 / scaleRectHeight));
-  if (scaleFactor <= 1) {
-    scaleFactor = 1.1;
+  if (scaleFactor_ <= 1) {
+    scaleFactor_ = 1.1;
   }
+
+  ORPoint_t scaleRectCenter;
+  boost::geometry::centroid(rect, scaleRectCenter);
+
+  ORPoint_t visRectCenter;
+  boost::geometry::centroid(curVisArea, visRectCenter);
+
+  ORPoint_t centerDist = scaleRectCenter;
+  boost::geometry::subtract_point(centerDist, visRectCenter);
+  ORPoint_t panDims = scaleRectCenter;
+
+  double xTrans = boost::geometry::get<0>(panDims) * scaleFactor_
+                  - visRectCenter.get<0>();
+  double yTrans = boost::geometry::get<1>(panDims) * scaleFactor_
+                  - visRectCenter.get<1>();
+
+  viewTransform_->scale(scaleFactor_, scaleFactor_, 1.0, false);
+  viewTransform_->translate(xTrans * -1, yTrans * -1);
+  isViewFit_ = false;
+  // refresh(true) ; It should be called from python
+}
+
+void GLView::setVisibleArea(const GLRectangle& zRect)
+{
+  if (!topCanvas_)
+    return;
+  resetPixmaps();
+  viewTransform_->resetTransform();
+
+  ORRect_t curVisArea = fitVisArea_;
+
+  ORRect_t rect = zRect;
+  auto scaleRectWidth = rectWidth(rect);
+  auto scaleRectHeight = rectHeight(rect);
+
+  auto visRectWidth = rectWidth(curVisArea);
+  auto visRectHeight = rectHeight(curVisArea);
 
   ORPoint_t scaleRectCenter;
   bg::centroid(rect, scaleRectCenter);
@@ -436,13 +476,12 @@ void GLView::zoomRect(const GLRectangle& zRect)
   bg::subtract_point(centerDist, visRectCenter);
   ORPoint_t panDims = scaleRectCenter;
 
-  double xTrans = bg::get<0>(panDims) * scaleFactor - visRectCenter.get<0>();
-  double yTrans = bg::get<1>(panDims) * scaleFactor - visRectCenter.get<1>();
+  double xTrans = bg::get<0>(panDims) * scaleFactor_ - visRectCenter.get<0>();
+  double yTrans = bg::get<1>(panDims) * scaleFactor_ - visRectCenter.get<1>();
 
-  viewTransform_->scale(scaleFactor, scaleFactor, 1.0, false);
+  viewTransform_->scale(scaleFactor_, scaleFactor_, 1.0, false);
   viewTransform_->translate(xTrans * -1, yTrans * -1);
   isViewFit_ = false;
-  // refresh(true) ; It should be called from python
 }
 
 void GLView::translate(const GLPoint2D& transVec)
@@ -559,8 +598,11 @@ uint GLView::selectShapesInRegion(const GLRectangle& searchArea,
     selectedShapes_->clearTree();
   }
   std::vector<uint> layers;
+  if (worldView_ == false)
+    topCanvas_->getTopLayerNode()->getChildLayerIdsRecurse(layers);
+  else
+    layers = worldViewSelectLayers_;
 
-  topCanvas_->getTopLayerNode()->getChildLayerIdsRecurse(layers);
   ORRect_t searchRect = searchArea;
   uint shapesInReg = topCanvas_->popuateShapesFromRegion(
       layers, selectedShapes_, &searchRect);
@@ -722,7 +764,8 @@ void GLView::clearViewShapesInRegion(const GLRectangle& visReg,
   auto removeShapesInArea = [&](ORQuadTree<GLShape*>& tree) {
     std::vector<std::pair<ORRect_t, GLShape*>> shapesInRegion;
     // std::vector<OpenRoadShape*> shapesInRegion ;
-    tree.query(bgi::intersects(region), std::back_inserter(shapesInRegion));
+    tree.query(boost::geometry::index::intersects(region),
+               std::back_inserter(shapesInRegion));
     tree.remove(shapesInRegion.begin(), shapesInRegion.end());
   };
   if (TEST_FLAG(SELECT_VIEW_SHAPE, shpTypeFlags) != 0) {
@@ -740,7 +783,7 @@ void GLView::clearViewShapesInRegion(const GLRectangle& visReg,
       markerShps.erase(std::remove_if(markerShps.begin(),
                                       markerShps.end(),
                                       [&](GLShape* shp) {
-                                        return bg::covered_by(
+                                        return boost::geometry::covered_by(
                                             shp->getBBox().min_corner(),
                                             region);
                                       }),
@@ -831,12 +874,12 @@ void GLView::getViewShapesInArea(std::vector<GLShape*>& shapesInRegion,
   std::vector<std::pair<ORRect_t, GLShape*>> shapesInVisArea;
   if (TEST_FLAG(SELECT_VIEW_SHAPE, shpTypFlags) != 0) {
     for (auto& shpData : selectedShapes_->shapeColls_)
-      shpData.second.query(bgi::intersects(region),
+      shpData.second.query(boost::geometry::index::intersects(region),
                            std::back_inserter(shapesInVisArea));
   }
   if (TEST_FLAG(HIGHLIGHT_VIEW_SHAPE, shpTypFlags) != 0) {
     for (auto& shpData : highlightedShapes_->shapeColls_)
-      shpData.second.query(bgi::intersects(region),
+      shpData.second.query(boost::geometry::index::intersects(region),
                            std::back_inserter(shapesInVisArea));
   }
   if (TEST_FLAG(MARKER_VIEW_SHAPE, shpTypFlags) != 0) {
@@ -844,7 +887,7 @@ void GLView::getViewShapesInArea(std::vector<GLShape*>& shapesInRegion,
       for (auto& shp : markerData.second) {
         GLMarkerShape* markerShp = dynamic_cast<GLMarkerShape*>(shp);
         ORPoint_t markerLoc = markerShp->getMarkerLoc();
-        if (bg::covered_by(markerLoc, region))
+        if (boost::geometry::covered_by(markerLoc, region))
           shapesInRegion.push_back(shp);
       }
     }
@@ -923,8 +966,8 @@ void GLView::addVisibleRegion(const GLRectangle& region)
   viewAreasToShow_.erase(std::remove_if(viewAreasToShow_.begin(),
                                         viewAreasToShow_.end(),
                                         [&](const ORRect_t& rect) {
-                                          return bg::intersects(rect,
-                                                                visRegion);
+                                          return boost::geometry::intersects(
+                                              rect, visRegion);
                                         }),
                          viewAreasToShow_.end());
   viewAreasToShow_.push_back(visRegion);
@@ -1007,7 +1050,11 @@ void GLView::startAnimationObject(DrawMotionShapeType motionType,
     double pty = motionStartPt.y();
     GLRectangle searchArea(ptx - 0.001, pty - 0.001, ptx + 0.001, pty + 0.001);
     std::vector<uint> layers;
-    topCanvas_->getTopLayerNode()->getChildLayerIdsRecurse(layers);
+    if (worldView_ == false)
+      topCanvas_->getTopLayerNode()->getChildLayerIdsRecurse(layers);
+    else
+      layers = worldViewSelectLayers_;
+
     ORRect_t searchRect = searchArea;
     SearchTree shapesInArea;
     uint shapesInReg = topCanvas_->popuateShapesFromRegion(
@@ -1032,12 +1079,31 @@ void GLView::startAnimationObject(DrawMotionShapeType motionType,
   motionInProgress_ = true;
 }
 
+void GLView::startAnimationObject(GLShape* shpToMove,
+                                  const GLPoint2D& startCoord,
+                                  uint shpLayer)
+{
+  GLPoint2D motionStartPt = getWorldCoord(startCoord);
+  GLMotionShape* motionShp = new GLAnimationShape(
+      motionStartPt, shpToMove, static_cast<int>(shpLayer));
+  motionShapes_.push_back(motionShp);
+  motionInProgress_ = true;
+}
+
 void GLView::stopAnimation()
 {
   for (auto& motionShp : motionShapes_)
     delete motionShp;
   motionShapes_.clear();
   motionInProgress_ = false;
+}
+
+void GLView::setWorldViewParams(std::vector<uint> drawLayers,
+                                std::vector<uint> selLayers)
+{
+  worldView_ = true;
+  worldViewDrawLayers_ = drawLayers;
+  worldViewSelectLayers_ = selLayers;
 }
 
 // static
@@ -1062,7 +1128,7 @@ GLView* GLView::getView(std::string viewName)
 
 void GLView::calculateMinDrawable()
 {
-  if (!topCanvas_) {
+  if (!topCanvas_ || viewName_ == "WorldView") {
     minDrawableArea_ = 0;
     return;
   }
@@ -1103,7 +1169,7 @@ bool GLView::drawViewRegion(const GLRectangle& drawVArea)
     for (auto& curArea : viewAreasToShow_) {
       ORRect_t curVisArea = curArea;
       ORRect_t resDrawArea;
-      if (bg::intersection(drawArea, curVisArea, resDrawArea)) {
+      if (boost::geometry::intersection(drawArea, curVisArea, resDrawArea)) {
         drawViewShapes(shpFlags, resDrawArea);
       }
     }
@@ -1118,7 +1184,7 @@ bool GLView::drawViewRegion(const GLRectangle& drawVArea)
     for (auto& curArea : viewAreasToShow_) {
       ORRect_t curVisArea = curArea;
       ORRect_t resDrawArea;
-      if (bg::intersection(drawArea, curVisArea, resDrawArea)) {
+      if (boost::geometry::intersection(drawArea, curVisArea, resDrawArea)) {
         // std::cout << "Drawing Canvas Region : "<< resDrawArea<<std::endl ;
         numShapesDrawn_ = topCanvas_->drawCanvas(this, resDrawArea);
       }
@@ -1137,7 +1203,7 @@ bool GLView::drawViewRegion(const GLRectangle& drawVArea)
   for (auto& curArea : viewAreasToShow_) {
     ORRect_t curVisArea = curArea;
     ORRect_t resDrawArea;
-    if (bg::intersection(drawArea, curVisArea, resDrawArea)) {
+    if (boost::geometry::intersection(drawArea, curVisArea, resDrawArea)) {
       drawViewShapes(shpFlags, resDrawArea);
     }
   }
@@ -1214,7 +1280,8 @@ bool GLView::drawViewShapes(unsigned int shpTypeFlags,
                                GLPen* pen,
                                bool drawOutline) {
     std::vector<std::pair<ORRect_t, GLShape*>> shapesInRegion;
-    tree.query(bgi::intersects(drawRegion), std::back_inserter(shapesInRegion));
+    tree.query(boost::geometry::index::intersects(drawRegion),
+               std::back_inserter(shapesInRegion));
     for (auto& treeItem : shapesInRegion) {
       GLShape* shp = treeItem.second;
       shp->draw(this, shpIdx, pen, nullptr, false, drawOutline);
@@ -1223,7 +1290,17 @@ bool GLView::drawViewShapes(unsigned int shpTypeFlags,
   if (TEST_FLAG(SELECT_VIEW_SHAPE, shpTypeFlags) != 0) {
     selectPen_->setGLPenContext();
     for (auto& shapeData : selectedShapes_->shapeColls_) {
-      drawShapesInQTree(shapeData.first, shapeData.second, selectPen_, true);
+      // drawShapesInQTree(shapeData.first, shapeData.second, selectPen_, true);
+      uint shpLayIdx = shapeData.first;
+      GLLayer* shpLayer = GLLayer::getLayerAt(shpLayIdx);
+      if (shpLayer->getLayerType() == WORLD_VIEW_LAYER) {
+        shpLayer->getLayerPen()->setGLPenContext();
+        drawShapesInQTree(
+            shapeData.first, shapeData.second, shpLayer->getLayerPen(), false);
+      } else {
+        selectPen_->setGLPenContext();
+        drawShapesInQTree(shapeData.first, shapeData.second, selectPen_, true);
+      }
     }
   } else {
   }
@@ -1292,17 +1369,19 @@ void GLView::setOrthoProjection()
   auto maxC = clipRect.max_corner();
   auto rectDims = maxC;
 
-  bg::subtract_point(rectDims, minC);
-  auto width = bg::get<0>(rectDims);
-  auto height = bg::get<1>(rectDims);
+  boost::geometry::subtract_point(rectDims, minC);
+  auto width = boost::geometry::get<0>(rectDims);
+  auto height = boost::geometry::get<1>(rectDims);
 
   if (width > height * aspect) {
     // alter the height
     double newHeight = width / aspect;
     double delta = (newHeight - height) / 2.0;
 
-    ORPoint_t newLL(bg::get<0>(minC), bg::get<1>(minC) - delta);
-    ORPoint_t newUR(bg::get<0>(maxC), bg::get<1>(maxC) + delta);
+    ORPoint_t newLL(boost::geometry::get<0>(minC),
+                    boost::geometry::get<1>(minC) - delta);
+    ORPoint_t newUR(boost::geometry::get<0>(maxC),
+                    boost::geometry::get<1>(maxC) + delta);
 
     clipOrtho = ORRect_t(newLL, newUR);
   } else {
@@ -1310,8 +1389,10 @@ void GLView::setOrthoProjection()
     double newWidth = height * aspect;
     double delta = (newWidth - width) / 2.0;
 
-    ORPoint_t newLL(bg::get<0>(minC) - delta, bg::get<1>(minC));
-    ORPoint_t newUR(bg::get<0>(maxC) + delta, bg::get<1>(maxC));
+    ORPoint_t newLL(boost::geometry::get<0>(minC) - delta,
+                    boost::geometry::get<1>(minC));
+    ORPoint_t newUR(boost::geometry::get<0>(maxC) + delta,
+                    boost::geometry::get<1>(maxC));
 
     clipOrtho = ORRect_t(newLL, newUR);
   }
@@ -1320,10 +1401,10 @@ void GLView::setOrthoProjection()
 
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  auto left = bg::get<0>(minC1);
-  auto right = bg::get<0>(maxC1);
-  auto bottom = bg::get<1>(minC1);
-  auto top = bg::get<1>(maxC1);
+  auto left = boost::geometry::get<0>(minC1);
+  auto right = boost::geometry::get<0>(maxC1);
+  auto bottom = boost::geometry::get<1>(minC1);
+  auto top = boost::geometry::get<1>(maxC1);
   std::stringstream oss;
   oss << "Setting OrthoGraphic Projection as : " << left << ", " << right
       << ", " << bottom << ", " << top;

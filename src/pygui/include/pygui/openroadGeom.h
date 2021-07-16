@@ -49,27 +49,26 @@
 #include <boost/geometry/geometries/geometries.hpp>
 #include <boost/geometry/geometries/point.hpp>
 
-using namespace boost;
-
-namespace bg = boost::geometry;
-namespace bgi = boost::geometry::index;
-
 #endif
 
 namespace OpenRoadUI {
 class GLShape;
 #ifndef SWIG
-typedef bg::model::point<double, 2, bg::cs::cartesian> ORPoint_t;
-typedef bg::model::point<double, 3, bg::cs::cartesian> ORPoint3D_t;
+typedef boost::geometry::model::point<double, 2, boost::geometry::cs::cartesian>
+    ORPoint_t;
+typedef boost::geometry::model::point<double, 3, boost::geometry::cs::cartesian>
+    ORPoint3D_t;
 
-typedef bg::model::segment<ORPoint_t> ORSegment_t;
-typedef bg::model::box<ORPoint_t> ORRect_t;
+typedef boost::geometry::model::segment<ORPoint_t> ORSegment_t;
+typedef boost::geometry::model::box<ORPoint_t> ORRect_t;
 
 template <typename T>
 using value_t = std::pair<ORRect_t, T>;
 
 template <typename T>
-using ORQuadTree = bgi::rtree<value_t<T>, bgi::quadratic<16>>;
+using ORQuadTree
+    = boost::geometry::index::rtree<value_t<T>,
+                                    boost::geometry::index::quadratic<16>>;
 
 template <typename T>
 class ORMinSizePredicate
@@ -81,8 +80,8 @@ class ORMinSizePredicate
     const ORRect_t& box = o.first;
     const ORPoint_t& ll = box.min_corner();
     const ORPoint_t& ur = box.max_corner();
-    int w = bg::get<0>(ur) - bg::get<0>(ll);
-    int h = bg::get<1>(ur) - bg::get<1>(ll);
+    int w = boost::geometry::get<0>(ur) - boost::geometry::get<0>(ll);
+    int h = boost::geometry::get<1>(ur) - boost::geometry::get<1>(ll);
     return std::max(w, h) >= min_size_;
   }
 
@@ -100,7 +99,7 @@ class ORMinHeightPredicate
     const ORRect_t& box = o.first;
     const ORPoint_t& ll = box.min_corner();
     const ORPoint_t& ur = box.max_corner();
-    int h = bg::get<1>(ur) - bg::get<1>(ll);
+    int h = boost::geometry::get<1>(ur) - boost::geometry::get<1>(ll);
     return h >= min_height_;
   }
 
@@ -216,6 +215,7 @@ class GLRectangle
 
   GLPoint2D ll() const;
   GLPoint2D ur() const;
+  GLPoint2D center() const;
 
   double width() const { return (ur_.x() - ll_.x()); }
   double height() const { return (ur_.y() - ll_.y()); }
@@ -225,6 +225,7 @@ class GLRectangle
 
   GLRectangle bloat(float bloatFactor);
   double area() { return (ur_.x() - ll_.x()) * (ur_.y() - ll_.y()); }
+  GLRectangle translate(float transX, float transY) const;
 
  public:
   GLPoint2D ll_;
@@ -244,6 +245,8 @@ struct SearchTree
 
   void clearTreeLayers(const std::vector<uint>& layers);
   void clearAndDestroyTreeLayers(const std::vector<uint>& layers);
+
+  void dumpTree();
 };
 }  // namespace OpenRoadUI
 

@@ -40,13 +40,15 @@
 #include <iostream>
 #include <sstream>
 
+#include "opendb/dbTypes.h"
 #include "pygui/openroadGeom.h"
 #include "pygui/openroadGlobals.h"
+#include "pygui/openroadIntf.h"
 #include "pygui/openroadLayer.h"
 #include "pygui/openroadShape.h"
 #include "pygui/openroadTransform.h"
 #include "pygui/openroadView.h"
-namespace bg = boost::geometry;
+// namespace bg = boost::geometry;
 
 namespace OpenRoadUI {
 std::unordered_map<std::string, GLCanvas*> GLCanvas::_allCanvases
@@ -265,7 +267,7 @@ GLShape* GLCanvas::findFirstMatchingShape(const std::vector<uint>& searchLayers,
     auto& layerShapes = (*itr).second;
     if (searchRegion != nullptr) {
       std::vector<std::pair<ORRect_t, GLShape*>> shapesInRegion;
-      layerShapes.query(bgi::intersects(*searchRegion),
+      layerShapes.query(boost::geometry::index::intersects(*searchRegion),
                         std::back_inserter(shapesInRegion));
       for (auto& treeItem : shapesInRegion) {
         GLShape* shp = treeItem.second;
@@ -294,7 +296,7 @@ void GLCanvas::findShapesInRegion(const std::vector<uint>& searchLayers,
     auto& layerShapes = (*itr).second;
     if (searchRegion != nullptr) {
       std::vector<std::pair<ORRect_t, GLShape*>> shapesInTree;
-      layerShapes.query(bgi::intersects(*searchRegion),
+      layerShapes.query(boost::geometry::index::intersects(*searchRegion),
                         std::back_inserter(shapesInTree));
       std::for_each(
           shapesInTree.begin(), shapesInTree.end(), [&](auto& layerShp) {
@@ -325,7 +327,7 @@ uint GLCanvas::popuateShapesFromRegion(const std::vector<uint>& searchLayers,
     auto& layerShapes = (*itr).second;
     if (searchRegion != nullptr) {
       std::vector<std::pair<ORRect_t, GLShape*>> shapesInTree;
-      layerShapes.query(bgi::intersects(*searchRegion),
+      layerShapes.query(boost::geometry::index::intersects(*searchRegion),
                         std::back_inserter(shapesInTree));
       numShapesInTheRegion += shapesInTree.size();
       std::for_each(shapesInTree.begin(),
@@ -366,12 +368,20 @@ uint GLCanvas::drawCanvas(GLView* view, const ORRect_t& visArea)
   uint numShapesDrawn = 0;
 
   std::vector<uint> childLayers;
-  topLayerTreeNode_->getChildLayerIdsRecurse(childLayers, false, true);
+  if (view->isWorldView() == false)
+    topLayerTreeNode_->getChildLayerIdsRecurse(childLayers, false, true);
+  else
+    childLayers = view->getWorldViewDrawLayers();
+
   std::set<uint> layersToDraw;
   numShapesDrawn = 0;
   layersToDraw.insert(childLayers.begin(), childLayers.end());
+  bool drawGuts = !view->isWorldView();
+  auto intfInst = OpenRoadIntf::getOpenRoadIntfInst();
   for (auto& layIdx : layersToDraw) {
     GLLayer* layer = GLLayer::getLayerAt(layIdx);
+    if (layer->isInternalLayer())
+      continue;
     GLPen* layerPen = layer->getLayerPen();
     std::stringstream oss;
     oss << "Setting the pen for Layer : " << layIdx << " whose pattern is "
@@ -384,14 +394,15 @@ uint GLCanvas::drawCanvas(GLView* view, const ORRect_t& visArea)
       numShapesDrawn += drawLayer(
           layIdx, visArea, view, false);  // Draw the leaf shapes in this layer
     }
-    if (view->getCurrentViewDepth()
-        < view->getMaxViewDepthToDraw()) {  // Draw Guts only when needed
+    if (drawGuts
+        && view->getCurrentViewDepth()
+               < view->getMaxViewDepthToDraw()) {  // Draw Guts only when needed
       for (auto& cnvInstLayer : layersWithCanvasInsts_) {
         GLLayer* cnvLayer = GLLayer::getLayerAt(cnvInstLayer);
         auto& shapeQTree = shapeColls_->shapeColls_[cnvInstLayer];
         std::vector<std::pair<ORRect_t, GLShape*>> shapesInRegion;
         shapesInRegion.reserve(shapeQTree.size());
-        shapeQTree.query(bgi::intersects(visArea),
+        shapeQTree.query(boost::geometry::index::intersects(visArea),
                          std::back_inserter(shapesInRegion));
         for (auto& shpItem : shapesInRegion) {
           GLShape* shp = shpItem.second;
@@ -406,12 +417,13 @@ uint GLCanvas::drawCanvas(GLView* view, const ORRect_t& visArea)
         }
       }
     }
+    intfInst->drawExternalRenderersForLayer(view, layer, this);
     oss.clear();
     oss << "Number of shapes Drawn in layer : " << layIdx
         << " with pattern = " << numShapesDrawn;
     DEBUG_PRINT(oss.str());
   }
-
+  intfInst->drawExternalRenderersForObjects(view, this);
   return numShapesDrawn;
 }
 
@@ -431,7 +443,7 @@ uint GLCanvas::drawLayer(int layerIdx,
   auto& shapeQTree = shapeColls_->shapeColls_[layerIdx];
   std::vector<std::pair<ORRect_t, GLShape*>> shapesInRegion;
   shapesInRegion.reserve(shapeQTree.size());
-  shapeQTree.query(bgi::intersects(visArea),
+  shapeQTree.query(boost::geometry::index::intersects(visArea),
                    std::back_inserter(shapesInRegion));
   int layIdx = propogateLayer == true ? layerIdx : -1;
   for (auto& shpItem : shapesInRegion) {
@@ -452,7 +464,7 @@ GLCanvas* GLCanvas::getCanvas(const char* canvasName)
 }
 
 // static
-GLCanvas* GLCanvas::getDummyCanvas()
+GLCanvas* GLCanvas::getDummyCanvas(bool onlyOutline)
 {
   static std::string dummyCnvName = "DummyCanvas";
   GLCanvas* cnv = GLCanvas::getCanvas(dummyCnvName.c_str());
@@ -464,6 +476,14 @@ GLCanvas* GLCanvas::getDummyCanvas()
 
   GLLayer* topLayer = GLLayer::getLayerAt(0);
   cnv = new GLCanvas(topLayer, dummyCnvName.c_str());
+
+  if (onlyOutline) {
+    ORRect_t faceRect(ORPoint_t(130, 440), ORPoint_t(590, 830));
+    GLShape* faceShp = new GLRectShape(faceRect);
+    faceShp->setUserData((void*) faceName);
+    (void) cnv->addShape(faceShp, 7);
+    return cnv;
+  }
 
   // ORRect_t (ORPoint_t(32, 48), ORPoint_t(40, 51)) ;
   ORRect_t lowerLipRect(ORPoint_t(320, 480), ORPoint_t(400, 510));
@@ -488,13 +508,15 @@ GLCanvas* GLCanvas::getDummyCanvas()
     leftEyeShp = new GLRectShape(leftEyeRect);
     rightEyeShp = new GLRectShape(rightEyeRect);
   } else {
-    leftEyeShp = new GLCanvasInstShape(dummyEyeCnv, leftEyeRect, R0);
+    leftEyeShp = new GLCanvasInstShape(
+        dummyEyeCnv, leftEyeRect, odb::dbOrientType::R0);
     ORRect_t rightEyeRect90
         = ORRect_t(ORPoint_t(470, 710),
                    ORPoint_t(550, 775));  // For 90 * (2n-1) rotation family
     // rightEyeShp = new OpenRoadCanvasInstShape(dummyEyeCnv, rightEyeRect90,
     // MXR90) ;
-    rightEyeShp = new GLCanvasInstShape(dummyEyeCnv, rightEyeRect90, MXR90);
+    rightEyeShp = new GLCanvasInstShape(
+        dummyEyeCnv, rightEyeRect90, odb::dbOrientType::MXR90);
   }
 
   GLShape* faceShp = new GLRectShape(faceRect);

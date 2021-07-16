@@ -60,11 +60,15 @@ Gui* gui::Gui::get()
   return singleton_;
 }
 
-void gui::Gui::register_renderer(gui::Renderer*)
+void gui::Gui::registerRenderer(gui::Renderer*)
 {
 }
 
-void gui::Gui::unregister_renderer(gui::Renderer*)
+void gui::Gui::unregisterRenderer(gui::Renderer*)
+{
+}
+
+void gui::Gui::zoomTo(const odb::Rect& rect_dbu)
 {
 }
 
@@ -76,9 +80,6 @@ void gui::Gui::pause()
 {
 }
 
-void gui::Gui::zoomIn(odb::Rect const& r)
-{
-}
 void Gui::status(const std::string& /* message */)
 {
 }
@@ -86,8 +87,30 @@ void Gui::status(const std::string& /* message */)
 Renderer::~Renderer()
 {
 }
+void gui::Gui::addCustomVisibilityControl(const std::string& name,
+                                          bool initially_visible)
+{
+}
 
-OpenDbDescriptor* OpenDbDescriptor::get()
+bool gui::Gui::checkCustomVisibilityControl(const std::string& name)
+{
+  return false;
+}
+
+void Gui::status(const std::string& /* message */)
+{
+}
+
+Selected Gui::makeSelected(std::any /* object */, void* /* additional_data */)
+{
+  return Selected();
+}
+
+void Gui::setSelected(Selected selection)
+{
+}
+
+Descriptor* OpenDbDescriptor::get()
 {
   return nullptr;
 }

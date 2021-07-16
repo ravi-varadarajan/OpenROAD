@@ -1,9 +1,11 @@
+%module pygui
+
 /////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2020, OpenROAD
-// All rights reserved.
-//
 // BSD 3-Clause License
+//
+// Copyright (c) 2020, Kaushal K Pathak
+// All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -33,64 +35,18 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#pragma once
+%{
+#include "openroad/OpenRoad.hh"
+#include "utility/Logger.h"
+#include "pygui/pygui.h"
+%}
 
-#include <string>
-#include <utility>
-#include <vector>
-
-//#include "openroadGeom.h"
-#include "openroadUiEnums.h"
-
-namespace OpenRoadUI {
-// This class will be derived in python
-class GLView;
-class GLCanvas;
-
-struct openRoadTclRes
+%inline %{
+void pyguiTestPrint()
 {
-  openRoadTclRes() : tclRes(), tclRetVal(false) {}
+    printf("pygui Test Print\n");
+    return;
+}
 
-  std::string tclRes;
-  bool tclRetVal;
-};
+%} // inline
 
-class OpenRoadPythonIntf
-{
- public:
-  virtual ~OpenRoadPythonIntf();
-
-  // These functions will be implemented in Python
-  virtual void printMessage(const std::string& msg) { }
-  virtual void setDatabaseId(unsigned int dbId) = 0;
-  virtual void setTclEvalState(bool state,
-                               std::string statusMsg,
-                               bool channelOut = true)
-      = 0;
-
-  virtual bool setGLForDevice(std::string devName) = 0;
-
-  virtual void redrawLayoutView() = 0;
-  virtual void pause() = 0;
-  virtual void zoomTo(double llx, double lly, double urx, double ury) = 0;
-  virtual void showStatusMessage(const std::string& message) = 0;
-
-  void updateCanvas(GLCanvas* cnv);
-  // Python will be able to call these functions in C++
-  void displayMessage(const char* msg);
-  openRoadTclRes executeTclCommand(const char* cmdStr);
-  void initOnce();
-
-  bool showObjectInView(std::string objName,
-                        DBObjectType objType,
-                        ViewOpType viewOp,
-                        GLView* p_view,
-                        bool deselectPrior = true);
-  static OpenRoadPythonIntf* get() { return _sOrPyIntf; }
-
- protected:
-  OpenRoadPythonIntf();
-
-  static OpenRoadUI::OpenRoadPythonIntf* _sOrPyIntf;
-};
-};  // namespace OpenRoadUI

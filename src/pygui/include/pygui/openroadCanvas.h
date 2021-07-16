@@ -38,7 +38,7 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 
-#include "../include/pygui/openroadGlobals.h"
+#include "pygui/openroadGlobals.h"
 #endif
 
 #include <set>
@@ -47,8 +47,8 @@
 #include <utility>
 #include <vector>
 
-#include "../include/pygui/openroadGeom.h"
-#include "../include/pygui/openroadUiEnums.h"
+#include "pygui/openroadGeom.h"
+#include "pygui/openroadUiEnums.h"
 
 namespace OpenRoadUI {
 // Forward Class Declarations
@@ -124,7 +124,7 @@ class GLCanvas
   int getOutlineLayer() const { return outlineLayer_; }
 
   static GLCanvas* getCanvas(const char* canvasName);
-  static GLCanvas* getDummyCanvas();
+  static GLCanvas* getDummyCanvas(bool outlineOnly = false);
 
  private:
   std::string canvasName_;

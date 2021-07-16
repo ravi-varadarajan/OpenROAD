@@ -66,7 +66,9 @@
 #include "ord/InitOpenRoad.hh"
 #include "ord/OpenRoad.hh"
 #include "utl/Logger.h" 
-#include "gui/gui.h"
+//#include "gui/gui.h"
+#include "pygui/pygui.h"
+#include "pygui/openroadIntf.h"
 
 using std::string;
 using sta::stringEq;
@@ -85,7 +87,7 @@ extern "C"
 
 static int cmd_argc;
 static char **cmd_argv;
-bool gui_mode = false;
+bool pygui_mode = false;
 const char* log_filename = nullptr;
 const char* metrics_filename = nullptr;
 
@@ -188,8 +190,14 @@ main(int argc,
   cmd_argc = argc;
   cmd_argv = argv;
   if (findCmdLineFlag(cmd_argc, cmd_argv, "-gui")) {
-    gui_mode = true;
-    return gui::startGui(cmd_argc, cmd_argv);
+    pygui_mode = true;
+    //return gui::startGui(cmd_argc, cmd_argv);
+    return OpenRoadUI::start_pyintf(true);
+  } else {
+    OpenRoadUI::start_pyintf(false);
+    std::string message("In C++ python\n");
+    if ( OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst())
+      OpenRoadUI::OpenRoadIntf::getOpenRoadIntfInst()->printMessageInPython(message);
   }
 #ifdef ENABLE_PYTHON3
   if (findCmdLineFlag(cmd_argc, cmd_argv, "-python")) {

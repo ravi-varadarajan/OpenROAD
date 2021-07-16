@@ -21,10 +21,6 @@ if (PythonLibs_FOUND AND ENABLE_PYGUI)
 	message(STATUS "PythonLibs Found")
 	message(STATUS "Python GUI is enabled")
 
-  add_library(pygui
-      src/pygui.cpp
-  )
-
   add_library(oruiobserver
       src/openroadPyIntf.cpp
       src/openroadIntf.cpp
@@ -41,9 +37,27 @@ if (PythonLibs_FOUND AND ENABLE_PYGUI)
   option(BUILD_PYTHON "Build Python SWIG module for pygui" ON)
 
 
+  set(PYGUI_WRAP ${CMAKE_CURRENT_BINARY_DIR}/pygui_wrap.cc)
 
-add_custom_target(
-    pyguipython  ALL
+  message(STATUS "Adding pygui TCL WRAP")
+  add_custom_command(OUTPUT ${PYGUI_WRAP}
+    COMMAND ${SWIG_EXECUTABLE} -tcl8 -c++ -namespace -prefix pygui -I${OPENROAD_HOME}/include -o ${PYGUI_WRAP} ${PYGUI_HOME}/src/pygui.i
+    COMMAND ${OPENSTA_HOME}/etc/SwigCleanup.tcl ${PYGUI_WRAP}
+    WORKING_DIRECTORY ${PYGUI_HOME}/src
+    DEPENDS
+      ${PYGUI_HOME}/src/pygui.i
+      ${PYGUI_HOME}/include/pygui/pygui.h
+  )
+
+  set_property(SOURCE ${PYGUI_WRAP} PROPERTY SKIP_AUTOMOC ON)
+
+  add_library(pygui
+      src/pygui.cpp
+      ${GUI_WRAP}
+  )
+
+
+add_custom_target( pyguipython  ALL
     ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_BINARY_DIR}/pyqtUI
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PYGUI_HOME}/pyqtUI ${CMAKE_CURRENT_BINARY_DIR}/pyqtUI
     SOURCES
@@ -68,6 +82,7 @@ target_include_directories(oruiobserver
   PRIVATE
     ${OPENROAD_HOME}/include
     ${Boost_INCLUDE_DIRS}
+    ${GUI_HOME}/include
     ${PYTHON_INCLUDE_DIRS}
     ${TCL_INCLUDE_PATH}
 )
@@ -85,6 +100,7 @@ target_include_directories(pygui
 
   PRIVATE
     ${OPENROAD_HOME}/include
+    ${GUI_HOME}/include
     ${Boost_INCLUDE_DIRS}
     ${PYTHON_INCLUDE_DIRS}
 )

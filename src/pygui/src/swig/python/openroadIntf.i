@@ -78,4 +78,5 @@ using namespace OpenRoadUI ;
 namespace std {
     %template(vector_string)                vector<std::string> ;
     %template(pair_uint_shape)              pair<uint, GLShape*> ;
+    %template(vector_uint)                  vector<uint> ;
 } ;

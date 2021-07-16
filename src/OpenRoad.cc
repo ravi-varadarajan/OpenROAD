@@ -66,7 +66,7 @@
 #include "ifp//MakeInitFloorplan.hh"
 #include "ppl/MakeIoplacer.h"
 #include "rsz/MakeResizer.hh"
-#include "gui/MakeGui.h"
+#include "pygui/MakePyGui.h"
 #include "dpl/MakeOpendp.h"
 #include "fin/MakeFinale.h"
 #include "mpl/MakeMacroPlacer.h"
@@ -234,7 +234,7 @@ OpenRoad::init(Tcl_Interp *tcl_interp)
   evalTclInit(tcl_interp, sta::openroad_swig_tcl_inits);
 
   initLogger(logger_, tcl_interp);
-  initGui(this); // first so we can register our sink with the logger
+  initPyGui(this); // first so we can register our sink with the logger
   Opendbtcl_Init(tcl_interp);
   initInitFloorplan(this);
   stt::readLUT();

@@ -40,15 +40,17 @@
 #include <utility>
 #include <vector>
 
-#include "../include/pygui/openroadUiEnums.h"
 #include "opendb/db.h"
 #include "opendb/dbBlockCallBackObj.h"
 #include "ord/OpenRoad.hh"
 #include "pygui/openroadPyIntf.h"
+#include "pygui/openroadUiEnums.h"
+#include "pygui/staGui.h"
 
 namespace OpenRoadUI {
 class GLCanvas;
-class staGui;
+class GLView;
+class GLLayer;
 
 class OpenRoadIntf : public ord::OpenRoad::Observer,
                      public odb::dbBlockCallBackObj
@@ -72,9 +74,18 @@ class OpenRoadIntf : public ord::OpenRoad::Observer,
                                    std::string& result);
 
   void buildDbCanvas(odb::dbDatabase* db);
+  void populateDbCanvas(GLCanvas* cnv);
 
   void findInstances(std::string objName, std::vector<odb::dbInst*>& insts);
   void findPins(std::string objName, std::vector<odb::dbObject*>& pins);
+
+  void drawExternalRenderersForLayer(GLView* view,
+                                     GLLayer* layer,
+                                     GLCanvas* canvas);
+  void drawExternalRenderersForObjects(GLView* view, GLCanvas* canvas);
+
+  double getDefUnits();
+  double getLefUnits();
 
   static void clearGlobals();
   static OpenRoadIntf* getOpenRoadIntfInst();
@@ -94,9 +105,6 @@ class OpenRoadIntf : public ord::OpenRoad::Observer,
   void addTermToCanvas(odb::dbBPin* pin, GLCanvas* p_cnv);
   void addInstToCanvas(odb::dbInst* inst, GLCanvas* p_cnv);
   void addFillsToCanvas(odb::dbBlock* block, GLCanvas* p_cnv);
-  void db2ViewerOrient(odb::dbOrientType dbOr, TxCellOrientType& viewerOr);
-  double getDefUnits();
-  double getLefUnits();
 
   static int channelOutput(ClientData instanceData,
                            const char* buf,
@@ -108,7 +116,7 @@ class OpenRoadIntf : public ord::OpenRoad::Observer,
 
   Tcl_Interp* _mOrTclInterp;
   ord::OpenRoad* _openroad;
-  staGui* _dbGuiIntf;
+  gui::staGui* _dbGuiIntf;
 
   std::vector<std::pair<std::string, std::string>> _mExecutedCommands;
   static Tcl_ChannelType stdoutChannelType;

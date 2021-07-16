@@ -48,8 +48,9 @@
 #include <boost/geometry/geometries/point_xy.hpp>
 #endif
 
-#include "../include/pygui/openroadGeom.h"
-#include "../include/pygui/openroadUiEnums.h"
+#include "pygui/openroadGeom.h"
+#include "pygui/openroadUiEnums.h"
+#include "opendb/dbTypes.h"
 
 using namespace OpenRoadUI;
 
@@ -338,17 +339,18 @@ class GLTransform
 class GLCellTransform : public GLTransform
 {
  public:
-  GLCellTransform(const GLRectangle& rect, TxCellOrientType ort = R0);
+  GLCellTransform(const GLRectangle& rect,
+                  odb::dbOrientType ort = odb::dbOrientType::R0);
   GLCellTransform();
   ~GLCellTransform() {}
 
   ORTransformType getTransformType() const { return OR_CELL_TRANSFORM; }
-  TxCellOrientType getOrientation() const { return cellOrient_; }
-  void setTransformParams(GLRectangle rect, TxCellOrientType ort);
+  odb::dbOrientType getOrientation() const { return cellOrient_; }
+  void setTransformParams(GLRectangle rect, odb::dbOrientType ort);
 
  private:
   void pushTransformOperations();
   GLRectangle cellBBox_;
-  TxCellOrientType cellOrient_;
+  odb::dbOrientType cellOrient_;
 };
 }  // namespace OpenRoadUI

@@ -32,38 +32,59 @@
 // POSSIBILITY OF SUCH DAMAGE.
 '''
 
-import os 
+import os
 from enum import Enum
+from PyQt5.QtCore import pyqtRemoveInputHook
+from pdb import set_trace
 
 SHOW_DEBUG_MSG = 'SHOW_DEBUG_MSG' in os.environ
 
-def printDebugMsg(msg) :
-    if SHOW_DEBUG_MSG :
+
+def printDebugMsg(msg):
+    if SHOW_DEBUG_MSG:
         print(msg)
 
-from enum import Enum
 
-class LayerDataType(Enum) :
-    COLOR_OR_PAT  = 1
-    VISIBILITY    = 2
+def debug_trace():
+    '''Set a tracepoint in the Python debugger that works with Qt'''
+    pyqtRemoveInputHook()
+    set_trace()
+
+
+class LayerDataType(Enum):
+    COLOR_OR_PAT = 1
+    VISIBILITY = 2
     SELECTABILITY = 3
 
-class OpenRoadGlobals(object):
-    openRoadIntf         = None
-    openRoadTclBridge    = None
-    openRoadMainWin      = None
 
-    openRoadDbHandle     = None
+class OpenRoadGlobals(object):
+    openRoadIntf = None
+    openRoadTclBridge = None
+    openRoadMainWin = None
+
+    openRoadDbHandle = None
     openRoadLayoutViewer = None
 
-    globalMap         = {}
+    shellPythonInterp = None
+
+    globalMap = {}
+
+    x = 5
 
     @classmethod
-    def get_openroad_intf(cls) :
+    def incrementX(cls):
+        cls.x = cls.x + 1
+
+    @classmethod
+    def getX(cls):
+        return cls.x
+
+    @classmethod
+    def get_openroad_intf(cls):
         return cls.openRoadIntf
 
     @classmethod
-    def get_tcl_bridge(cls) :
+    def get_tcl_bridge(cls):
         return cls.openRoadTclBridge
 
     @classmethod
@@ -77,3 +98,7 @@ class OpenRoadGlobals(object):
     @classmethod
     def get_layout_viewer(cls):
         return cls.openRoadLayoutViewer
+
+    @classmethod
+    def getPyInterp(cls):
+        return cls.shellPythonInterp

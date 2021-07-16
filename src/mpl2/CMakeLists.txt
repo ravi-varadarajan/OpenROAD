@@ -63,5 +63,5 @@ target_link_libraries(mpl2
     dbSta
     OpenSTA
     opendb
-    gui
+    pygui
 )

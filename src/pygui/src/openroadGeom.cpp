@@ -41,7 +41,8 @@
 
 std::ostream& operator<<(std::ostream& os, const OpenRoadUI::ORPoint_t& pt)
 {
-  os << "[" << bg::get<0>(pt) << ", " << bg::get<1>(pt) << "]";
+  os << "[" << boost::geometry::get<0>(pt) << ", "
+     << boost::geometry::get<1>(pt) << "]";
   return os;
 }
 
@@ -54,8 +55,9 @@ std::ostream& operator<<(std::ostream& os, const OpenRoadUI::GLPoint2D& pt)
 
 std::ostream& operator<<(std::ostream& os, const OpenRoadUI::ORPoint3D_t& pt)
 {
-  os << "[" << bg::get<0>(pt) << ", " << bg::get<1>(pt) << ", "
-     << bg::get<2>(pt) << "]";
+  os << "[" << boost::geometry::get<0>(pt) << ", "
+     << boost::geometry::get<1>(pt) << ", " << boost::geometry::get<2>(pt)
+     << "]";
   return os;
 }
 
@@ -105,7 +107,7 @@ double GLPoint2D::distance(const GLPoint2D& pt) const
 {
   ORPoint_t pt1 = *this;
   ORPoint_t pt2 = pt;
-  return bg::distance(pt1, pt2);
+  return boost::geometry::distance(pt1, pt2);
 }
 
 void GLPoint2D::print() const
@@ -133,11 +135,11 @@ GLSegment::GLSegment(const GLSegment& seg) : end1_(seg.end1_), end2_(seg.end2_)
 
 GLSegment::GLSegment(const ORSegment_t& seg)
 {
-  end1_.x_ = bg::get<0, 0>(seg);
-  end1_.y_ = bg::get<0, 1>(seg);
+  end1_.x_ = boost::geometry::get<0, 0>(seg);
+  end1_.y_ = boost::geometry::get<0, 1>(seg);
 
-  end2_.x_ = bg::get<1, 0>(seg);
-  end2_.y_ = bg::get<1, 1>(seg);
+  end2_.x_ = boost::geometry::get<1, 0>(seg);
+  end2_.y_ = boost::geometry::get<1, 1>(seg);
 }
 
 GLPoint2D GLSegment::end1() const
@@ -218,6 +220,10 @@ GLPoint2D GLRectangle::ur() const
   return ur_;
 }
 
+GLPoint2D GLRectangle::center() const
+{
+}
+
 void GLRectangle::print() const
 {
   ORPoint_t ll(ll_.x_, ll_.y_);
@@ -242,6 +248,17 @@ GLRectangle GLRectangle::bloat(float bloatFactor)
   auto outRect = bloatRect(curRect, bloatFactor);
   GLRectangle retRect(outRect);
   return retRect;
+}
+
+GLRectangle GLRectangle::translate(float transX, float transY) const
+{
+  double nllx = ll_.x() + transX;
+  double nlly = ll_.y() + transY;
+
+  double nurx = ur_.x() + transX;
+  double nury = ur_.y() + transY;
+
+  return GLRectangle(nllx, nlly, nurx, nury);
 }
 
 void SearchTree::addShapeInTree(uint layIdx, GLShape* p_shp)
@@ -294,9 +311,18 @@ void SearchTree::clearAndDestroyTreeLayers(const std::vector<uint>& layers)
   }
 }
 
+void SearchTree::dumpTree()
+{
+  std::cout << "Search Tree Data : \n";
+  for (auto& shpData : shapeColls_) {
+    std::cout << "\t Shape Count in Layer Index : " << shpData.first
+              << std::endl;
+  }
+}
+
 ORPoint3D_t appendDimension(const ORPoint_t& pt)
 {
-  ORPoint3D_t pt3d(bg::get<0>(pt), bg::get<1>(pt), 0);
+  ORPoint3D_t pt3d(boost::geometry::get<0>(pt), boost::geometry::get<1>(pt), 0);
   return pt3d;
 }
 
@@ -307,7 +333,7 @@ ORRect_t bloatRect(const ORRect_t& inpRect, float bloatFactor)
 
   auto rWidth = rectWidth(inpRect);
   auto rLength = rectHeight(inpRect);
-  auto rectArea = bg::area(inpRect);
+  auto rectArea = boost::geometry::area(inpRect);
 
   auto aspectRatio = rLength / rWidth;
 
@@ -335,7 +361,7 @@ double rectWidth(const ORRect_t& inpRect)
 {
   auto minC = inpRect.min_corner();
   auto maxC = inpRect.max_corner();
-  bg::subtract_point(maxC, minC);
+  boost::geometry::subtract_point(maxC, minC);
   auto width = std::abs(maxC.get<0>());
   return width;
 }
@@ -344,7 +370,7 @@ double rectHeight(const ORRect_t& inpRect)
 {
   auto minC = inpRect.min_corner();
   auto maxC = inpRect.max_corner();
-  bg::subtract_point(maxC, minC);
+  boost::geometry::subtract_point(maxC, minC);
   auto height = std::abs(maxC.get<1>());
   return height;
 }
