@@ -1697,6 +1697,52 @@ void AutoClusterMgr::PrintIOPadNet(std::ostream& out)
   }
 }
 
+
+void CalculateEdge(odb::dbBlock*& block,
+  std::vector<std::vector<unsigned> >& hyperedges,
+  std::map<odb::dbBTerm*, unsigned>& io_vertex_map,
+  std::map<odb::dbITerm*, unsigned>& macro_pin_vertex_map,
+  std::map<odb::dbInst*,  unsigned>& stdcell_vertex_map) {
+  // traverse each net
+  for (dbNet* net : block->getNets()) {
+    if (net->getSigType().isSupply()) {
+      continue;
+    }
+
+    unsigned driver_id = 0;
+    std::vector<unsigned> loads_id;
+    for (dbITerm* iterm : net->getITerms()) {
+      int id = -1;
+      if (iterm->getInst()->getMaster()->isBlock() == true)
+        id = macro_pin_vertex_map[iterm];
+      else
+        id = stdcell_vertex_map[iterm->getInst()];
+      if (iterm->getIoType() == dbIoType::OUTPUT) {
+        driver_id = id;
+      } else {
+        loads_id.push_back(id);
+      }
+    }
+
+
+    for (dbBTerm* bterm : net->getBTerms()) {
+      const unsigned int id = io_vertex_map[bterm];
+      if (bterm->getIoType() == dbIoType::INPUT) {
+        driver_id = id;
+      } else {
+        loads_id.push_back(id);
+      }
+    }
+
+    if (driver_id != 0 && loads_id.size() > 0) {
+      auto& hyperedge = hyperedges[driver_id - 1];
+      for (auto load_id : loads_id)
+        if (load_id != driver_id)
+          hyperedge.push_back(load_id);
+    }
+  }
+}
+
 //
 //  Auto clustering by traversing the design hierarchy
 //
@@ -1740,6 +1786,185 @@ void AutoClusterMgr::partitionDesign(unsigned int max_num_macro,
   timing_weight_ = timing_weight;
   std_cell_timing_flag_ = std_cell_timing_flag;
 
+  Rect bound_box = block_->getDieArea();
+  
+  std::map<odb::dbBTerm*, unsigned> io_vertex_map;
+  std::map<odb::dbInst*,  unsigned> stdcell_vertex_map;
+  std::map<odb::dbITerm*, unsigned> macro_pin_vertex_map;
+ 
+  unsigned vertex_id = 1;
+  std::string hypergraph_file = string(report_directory) + '/' + file_name;
+  std::string vertex_file = string(report_directory) + '/' + file_name + ".vertex";
+  std::ofstream vertex_file_output;
+  vertex_file_output.open(vertex_file);
+  // get pin positions
+  for (auto term : block_->getBTerms()) {
+    const std::string bterm_name = term->getName();
+    int lx = INT_MAX;
+    int ly = INT_MAX;
+    int ux = 0;
+    int uy = 0;
+    for (const auto pin : term->getBPins()) {
+      for (const auto box : pin->getBoxes()) {
+        lx = min(lx, box->xMin());
+        ly = min(ly, box->yMin());
+        ux = max(ux, box->xMax());
+        uy = max(uy, box->yMax());
+      }
+    }
+    int x = (lx + ux) / 2;
+    int y = (ly + uy) / 2;
+    if (lx == bound_box.xMin())
+      x = lx;
+    else if (ux == bound_box.xMax())
+      x = ux;
+    else if (ly == bound_box.yMin())
+      y = ly;
+    else if (uy == bound_box.yMax())
+      y = uy;
+
+    vertex_file_output << term->getName() << "  "
+                       << "port" << "  "
+                       << (x / dbu_ ) << "  "
+                       << (y / dbu_ ) << "  "
+                       << "0.0 0.0" << "  "
+                       << std::endl;
+    io_vertex_map[term] = vertex_id++;
+  }
+
+  
+  // get macro pin position
+  for (auto inst : block_->getInsts()) {
+    dbMaster* master = inst->getMaster();
+    float width = master->getWidth();
+    float height = master->getHeight();
+    if (master->isBlock() == true) {
+      int lx = -1.0;
+      int ly = -1.0;
+      inst->getLocation(lx, ly);
+      stdcell_vertex_map[inst] = vertex_id++;
+      int ux = lx + master->getWidth();
+      int uy = ly + master->getHeight();
+      // Orientation map from LEF/DEF to OpenAccess
+      // N - R0, S - R180, W - R90, E - R270
+      // FN - MY, FS - MX, FW - MX90, FE - MY90
+      std::string orientation = inst->getOrient().getString();
+      std::string orient = "None";
+      if (orientation == std::string("R0"))
+        orient = "N";
+      else if (orientation == std::string("R180"))
+        orient = "S";
+      else if (orientation == std::string("R90"))
+        orient = "W";
+      else if (orientation == std::string("R270"))
+        orient = "E";
+      else if (orientation == std::string("MY"))
+        orient = "FN";
+      else if (orientation == std::string("MX"))
+        orient = "FS";
+      else if (orientation == std::string("MX90"))
+        orient = "FW";
+      else if (orientation == std::string("MY90"))
+        orient = "FE";
+
+      vertex_file_output << inst->getName() << "  "
+                         << "macro" << "  "
+                         << (lx + ux) / ( 2 * dbu_ ) << "  "
+                         << (ly + uy) / ( 2 * dbu_ ) << "  "
+                         << master->getWidth() / (  dbu_ ) << "  "
+                         << master->getHeight() / (  dbu_ ) << "  "
+                         << orient
+                         << std::endl;
+    
+      for (dbITerm* iterm : inst->getITerms()) {
+        auto mterm = iterm->getMTerm();
+        if (mterm->getSigType() == odb::dbSigType::SIGNAL) {
+          Rect bbox;
+          bbox.mergeInit();
+          for (dbMPin* mpin : mterm->getMPins()) {
+            for (dbBox* box : mpin->getGeometry()) {
+              Rect rect = box->getBox();
+              bbox.merge(rect);
+            }
+          }
+
+          float x_offset = (bbox.xMin() + bbox.xMax() - width) / (2 * dbu_);
+          float y_offset = (bbox.yMin() + bbox.yMax() - height) / (2 * dbu_);
+          vertex_file_output << inst->getName() + "/" + mterm->getName() << "  "
+                             << "macro_pin" << "  "
+                             << (lx + ux) / ( 2 * dbu_ ) + x_offset << "  "
+                             << (ly + uy) / ( 2 * dbu_ ) + y_offset << "  "
+                             << "0.0  0.0  "
+                             << std::endl;
+          macro_pin_vertex_map[iterm] = vertex_id++;   
+        }
+      }
+    }
+  }
+
+  // get std cell position
+  for (auto inst : block_->getInsts()) {
+    dbMaster* master = inst->getMaster();
+    if (master->isBlock() == true)
+      continue;
+
+    int lx = -1.0;
+    int ly = -1.0;
+    inst->getLocation(lx, ly);
+    int ux = lx + master->getWidth();
+    int uy = ly + master->getHeight();
+    vertex_file_output << inst->getName() << "  "
+                       << "stdcell" << "  "
+                       << (lx + ux) / ( 2 * dbu_ ) << "  "
+                       << (ly + uy) / ( 2 * dbu_ ) << "  "
+                       << master->getWidth() / ( dbu_ ) << "  "
+                       << master->getHeight() / ( dbu_ ) << "  "
+                       << std::endl;
+    stdcell_vertex_map[inst] = vertex_id++;
+  }
+  
+  vertex_file_output.close();
+
+  std::string outline_file = hypergraph_file + ".outline";
+  std::ofstream outline_file_output;
+  outline_file_output.open(outline_file);
+  Rect die_box = block_->getCoreArea();
+  floorplan_lx_ = die_box.xMin();
+  floorplan_ly_ = die_box.yMin();
+  floorplan_ux_ = die_box.xMax();
+  floorplan_uy_ = die_box.yMax();
+
+  outline_file_output << floorplan_lx_ / dbu_ << "  ";
+  outline_file_output << floorplan_ly_ / dbu_ << "  ";
+  outline_file_output << floorplan_ux_ / dbu_ << "  ";
+  outline_file_output << floorplan_uy_ / dbu_ << std::endl;
+  outline_file_output.close();
+
+  std::vector<std::vector<unsigned> > hyperedges;
+  for (int i = 1; i < vertex_id; i++) {
+    std::vector<unsigned> hyperedge { i };
+    hyperedges.push_back(hyperedge);
+  }
+
+  CalculateEdge(block_, hyperedges, io_vertex_map, macro_pin_vertex_map, stdcell_vertex_map);
+  std::ofstream hypergraph_file_output;
+  hypergraph_file_output.open(hypergraph_file);
+  hypergraph_file_output << hyperedges.size() << " " << vertex_id - 1 << " " << std::endl;
+  for (const auto& hyperedge : hyperedges) {
+    for (const auto& vertex : hyperedge)
+      hypergraph_file_output << vertex << " ";
+    hypergraph_file_output << std::endl;
+  }
+
+  hypergraph_file_output.close();
+
+  return;
+
+
+
+
+
+  /*
   //***********************
   // write the PAD positions
   string pos_file = string(report_directory) + '/' + "positon.txt";
@@ -2115,6 +2340,7 @@ void AutoClusterMgr::partitionDesign(unsigned int max_num_macro,
   for (int i = 0; i < cluster_list_.size(); i++) {
     delete cluster_list_[i];
   }
+  */
 }
 
 }  // namespace par
